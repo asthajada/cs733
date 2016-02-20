@@ -870,6 +870,63 @@ func TestCandidateAppendEntriesResponse(t *testing.T) {
 	
 }
 
+func TestLeaderAppendEntriesResponse(t *testing.T) {
+
+	myLog := make([]Log,0)
+	myLog=append(myLog,Log{1,[]byte("1")})
+	myLog=append(myLog,Log{2,[]byte("2")})
+	myLog=append(myLog,Log{2,[]byte("3")})
+	myLog=append(myLog,Log{3,[]byte("4")})
+	myLog=append(myLog,Log{3,[]byte("5")})
+
+	//getting response from higher order term
+
+    s:=&node{term:4,votedFor:-1,log: myLog ,state: "leader",leaderID: 1, myID:1}
+
+	actionarray:=s.ProcessEvent(AppendEntriesResponse{term:5,success:false,from:3})
+
+	actionname,_,_,_,term,_,votedFor:=obtainDetails(actionarray,0)
+	expectString(t,actionname,"StateStore")
+	expectInt(t,term,5)
+	expectInt(t,votedFor,-1)
+
+	//term of leader is greater than the one from which AppendEntriesResponse if received and success=false
+
+	nextIndexArray:=make([]int,0)
+	nextIndexArray=append(nextIndexArray,4,4,4,4,4)
+	s=&node{term:4,votedFor:-1,log: myLog ,state: "leader",leaderID: 1, myID:1,nextIndex:nextIndexArray}
+
+	actionarray=s.ProcessEvent(AppendEntriesResponse{term:3,success:false,from:3,lastLogIndex:4})
+
+	actionname,event,_,_,term,_,_:=obtainDetails(actionarray,0)
+	expectString(t,actionname,"Send")
+	expectString(t,event,"AppendEntriesRequest")
+	expectInt(t,term,4)
+
+
+	//term of leader is greater than the one from which AppendEntriesResponse if received and success=true
+
+	nextIndexArray=make([]int,0)
+	nextIndexArray=append(nextIndexArray,5,5,5,5,5)
+
+	matchIndexArray:=make([]int,0)
+	matchIndexArray=append(matchIndexArray,4,3,2,4,4)
+	mypeerID:=make([]int,0)
+	mypeerID=append(mypeerID,1,2,3,4,5)
+
+	s=&node{term:3,votedFor:-1,log: myLog ,state: "leader",leaderID: 1, myID:1,nextIndex:nextIndexArray,matchIndex:matchIndexArray,peerID:mypeerID,commitIndex:2}
+
+	actionarray=s.ProcessEvent(AppendEntriesResponse{term:2,success:true,from:3,lastLogIndex:0,count:4})
+
+	actionname,_,_,_,_,_,_=obtainDetails(actionarray,0)
+	expectString(t,actionname,"Commit")
+
+
+
+}
+
+
+
 func TestFollowerTimeout(t *testing.T){
 
 	mypeerID:=make([]int,0)
@@ -1005,6 +1062,17 @@ func TestLeaderAppend(t *testing.T) {
 
 	actionname,_,_,_,_,_,_:=obtainDetails(actionarray,0)
 	expectString(t,actionname,"LogStore")
+
+	for i := 0; i < len(s.peerID); i++ {
+		
+		actionname,event,_,_,term,_,_:=obtainDetails(actionarray,i+1)
+
+		expectString(t,actionname,"Send")
+		expectString(t,event,"AppendEntriesRequest")
+		expectInt(t,term,2)
+		
+
+	}
 
 	
 }

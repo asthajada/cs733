@@ -2,6 +2,7 @@ package main
 
 import (
 	"strconv"
+	"sort"
 	
 )
 	
@@ -14,9 +15,8 @@ type node struct {
   commitIndex int
   state string
   leaderID int			//ID of the leader
- // nextIndex []int
- // matchIndex []int 
-  //eventCh chan event
+  nextIndex []int
+  matchIndex []int 
   myID int
   peerID []int 
   voteReceived []int      // status of votes of peers
@@ -42,7 +42,7 @@ type  VoteRequest  struct{
 }
 
 type VoteResponse struct{
-	from int           //
+	from int           //to know from where the vote is received
 	term int
 	voteGranted int     //-1 if not voted, 0 if no and 1 if yes
 }
@@ -60,8 +60,9 @@ type AppendEntriesRequest struct{
 type AppendEntriesResponse struct{
 	term int
 	success bool
-	from int
-
+	from int 		//to know from where the AppendEntriesResponse is received
+	count int 		//to keep track of how many entries were sent
+	lastLogIndex int
 }
 type Append struct{
 	data []byte
@@ -578,6 +579,73 @@ func onAppendEntriesResponse(obj AppendEntriesResponse, s *node)[]Action {
 			action = append(action, StateStore{term: s.term, votedFor: s.votedFor})
 		}
 		
+	}else{
+		//s.state=leader
+
+		if (s.term < obj.term) {
+			s.term=obj.term
+			s.votedFor=-1
+		
+			action = append(action, StateStore{term: s.term, votedFor: s.votedFor})
+		}else{
+
+					//checking if appendrequest was successfull
+			if(obj.success==false){
+				//decrease nextIndex 
+
+				if(s.nextIndex[obj.from]>1){
+
+					s.nextIndex[obj.from]=s.nextIndex[obj.from]-1
+				}
+
+
+				//updating last log index and term
+				newLastIndex:=obj.lastLogIndex-1
+				newlastTerm:=0
+				if(newLastIndex>=0){
+					newlastTerm=s.log[newLastIndex].term
+				}else{
+					newlastTerm=0
+				}
+
+				//obtaining data from newLastIndex to the length of the log
+				log:=s.log[newLastIndex+1:len(s.log)]
+
+				//resending AppendEntriesRequest
+		
+				action = append(action, Send{to: obj.from, event: AppendEntriesRequest{ leaderID: s.leaderID, term: s.term,prevLogIndex: newLastIndex, prevLogTerm: newlastTerm, log: log, leaderCommit: s.commitIndex}})
+			
+			}else {
+				// AppendEntryRequest successfull
+					
+				//updating matchIndex
+				if((obj.lastLogIndex+obj.count)+1>s.matchIndex[obj.from]){
+					s.matchIndex[obj.from]=obj.lastLogIndex+obj.count
+
+				}
+
+				// sorting matchIndex and storing in new array to find whether the entries can be commited
+				newmatchIndex := make([]int, len(s.peerID)-1)
+				copy(newmatchIndex, s.matchIndex)
+				sort.IntSlice(newmatchIndex).Sort()
+
+
+				//commit is found by looking the matchIndexes and finding which is present on the majority
+			
+
+				newCommit:=newmatchIndex[(len(s.peerID)-1)/2]     // for 5 servers looking the last second entry
+
+				//the entry is commited only if it is present on majority and for the same term
+				if(newCommit>s.commitIndex && s.log[newCommit].term==s.term){
+					s.commitIndex=newCommit
+					action = append(action,Commit{index:s.commitIndex,data:[]byte("")})
+
+				}
+				
+		
+			}
+		}
+		
 	}
 
 return action
@@ -652,6 +720,13 @@ action:=make([]Action,0)
 			s.log=append(s.log,Log{s.term,obj.data})
 		
 			action = append(action, LogStore{index: length, data: s.log[length].data})
+
+			//send empty append entries request
+			for i := 0; i < len(s.peerID); i++ {
+		
+				action=append(action, Send{to:s.peerID[i], event:AppendEntriesRequest{log:s.log,term:s.term}})
+			
+		}
 
 	}
 
