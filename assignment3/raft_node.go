@@ -20,23 +20,6 @@ type NetConfig struct {
 	Port int
 }
 
-/*type node struct {			
-
-
-  term int				//local term of the server
-  votedFor int  		// id of the server to whom vote is given,-1 if not given to anyone
-  log []Log
-  commitIndex int
-  state string
-  leaderID int			//ID of the leader
-  nextIndex []int
-  matchIndex []int 
-  myID int
-  peerID []int 
-  voteReceived []int      // status of votes of peers
-
-  }	
-*/
 type Node interface{
 
 	// Client's message to Raft node
@@ -89,10 +72,27 @@ func (rn *RaftNode) LeaderId() int {
 	
 }
 
+func getLeader(rn []RaftNode) RaftNode{
+	leaderID:=rn[0].server.leaderID
+
+	var ldr RaftNode
+	for i := 0; i < len(rn); i++ {
+		if rn[i].server.myID==leaderID {
+			ldr=rn[i]
+		}else{
+			ldr=rn[0] 			//this will never happen , there will always be a leader
+		}
+
+
+	}
+	return ldr
+	
+}
+
 func makeRafts() []RaftNode {
 	
 	myNetConfig := make([]NetConfig,0)
-	myNetConfig=append(myNetConfig,NetConfig{Id:100,Host:"localhost" ,Port:7001} )
+	myNetConfig=append(myNetConfig,NetConfig{Id:100,Host:"localhost" ,Port:7070} )
 	
 
 
@@ -104,7 +104,7 @@ func makeRafts() []RaftNode {
 
 	myNetConfig = make([]NetConfig,0)
 
-	myNetConfig=append(myNetConfig,NetConfig{Id:200,Host:"localhost" ,Port:7002} )
+	myNetConfig=append(myNetConfig,NetConfig{Id:200,Host:"localhost" ,Port:7080} )
 
 
 	myConfig=Config{cluster:myNetConfig,Id:100}
@@ -130,8 +130,8 @@ func New (config Config) RaftNode {
 
 	configCluster:=cluster.Config{ InboxSize: 100,
   		 Peers: []cluster.PeerConfig{
-   		  {Id:100,Address:"localhost:7001"},
-   		  {Id:200,Address:"localhost:7002"}, 		
+   		  {Id:100,Address:"localhost:7070"},
+   		  {Id:200,Address:"localhost:7080"}, 		
    		}}
 
   clusterServer,_:=cluster.New(config.Id,configCluster)
