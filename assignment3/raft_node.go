@@ -45,7 +45,7 @@ type Node interface{
 	CommittedIndex() int
 
 	// Returns the data at a log index, or an error.
-   // Get(index int) (err, []byte)
+    // Get(index int) (err, []byte)
 
 	// Node's id
 	Id() int
