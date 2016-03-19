@@ -214,10 +214,12 @@ func (rn *RaftNode) doActions(actions []Action) {
 
 				statestore:=action.(StateStore)
 
+				//writing statestore into the persistent storage
 				err:=writeFile("statestore"+ strconv.Itoa(rn.server.MyID),statestore )
 
 				if err!=nil {
 					
+					//reading from the persistent storage
 					_,err:=readFile("statestore"+strconv.Itoa(rn.server.MyID))
 
 					if err!=nil {
