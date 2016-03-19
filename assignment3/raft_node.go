@@ -139,19 +139,25 @@ func (rn *RaftNode) ProcessEvents() {
 		var ev Event
 
 		select{
+			//reading from eventCh
 			case ev = <- rn.eventCh:
 				actions := rn.server.ProcessEvent(ev)
 				rn.doActions(actions)
+
+			//reading from timeoutCh
 			case ev = <- rn.timeoutCh:
 
 				actions := rn.server.ProcessEvent(ev)
 				rn.doActions(actions)
+
 			case ev := <- rn.serverOfCluster.Inbox():
 				actions := rn.server.ProcessEvent(ev.Msg)
 				rn.doActions(actions)
 
+
 			case <- rn.heartbeattimer.C:
 
+				//send empty AppendEntriesRequest when heartbeat timer expires
 				if rn.server.State=="leader" {
 					
 						rn.timeoutCh <- Timeout{}
@@ -167,14 +173,11 @@ func (rn *RaftNode) ProcessEvents() {
 
 func (rn *RaftNode) doActions(actions []Action) {
 
-//	rn.timeoutCh=make(chan Time,100)
-//	rn.eventCh=make(chan Event,100)
-	//rn.commitCh=make(chan Commit,1000)
-
 	for _,action := range actions {
 	switch action.(type) {
 
 			case Send:
+				//resetting the timer
 				rn.timer.Stop()
 				rn.timer = time.AfterFunc(time.Duration(1000+rand.Intn(400))*time.Millisecond, func() { rn.timeoutCh <- Timeout{} })
 				
@@ -182,18 +185,21 @@ func (rn *RaftNode) doActions(actions []Action) {
 				
 				rn.serverOfCluster.Outbox() <- &cluster.Envelope{Pid:actionname.To, Msg:actionname.Event}
 			case Alarm:
-				
+				//resetting the timer
 				rn.timer.Stop()
 				rn.timer = time.AfterFunc(time.Duration(1000+rand.Intn(400))*time.Millisecond, func() { rn.timeoutCh <- Timeout{} })
 
 			case Commit:
 			
+				//output commit obtained from statemachine into the Commit Channel
 				newaction:=action.(Commit)
 	
 				rn.CommitChannel() <- &newaction
 
 			
 			case LogStore:
+
+				//creating persistent log files
 
 				lg, _ := log.Open(rn.LogDir+ string(rn.server.MyID))
 
@@ -203,6 +209,8 @@ func (rn *RaftNode) doActions(actions []Action) {
 			
 
 			case StateStore:
+
+				//creating files for persistent storage of State
 
 				statestore:=action.(StateStore)
 
