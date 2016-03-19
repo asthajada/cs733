@@ -3,69 +3,71 @@ package main
 import (
 	"strconv"
 	"sort"
+	"time"
+	"errors"
 	
 )
 	
 type RaftStateMachine struct {			
 
 
-  term int				//local term of the server
-  votedFor int  		// id of the server to whom vote is given,-1 if not given to anyone
-  log []Log
-  commitIndex int
-  state string
-  leaderID int			//ID of the leader
-  nextIndex []int
-  matchIndex []int 
-  myID int
-  peerID []int 
-  voteReceived []int      // status of votes of peers
+  Term int				//local Term of the server
+  VotedFor int  		// id of the server To whom vote is given,-1 if not given To anyone
+  Log []Log
+  CommitIndex int
+  State string
+  LeaderID int			//ID of the leader
+  NextIndex []int
+  MatchIndex []int 
+  MyID int
+  PeerID []int 
+  VoteReceived []int      // status of votes of peers
 
   }	
 
 type Log struct{
-	term int
-	data []byte
+	Term int
+	Data []byte
 }
 
 const noOfServers int=5
 
-type event interface{}
+//type Event interface{}
 
 const serverID int=123;
 
 type  VoteRequest  struct{
-	term int				//term for which it is candidate for election
-	candidateID int         // ID of the server requesting a vote
-	lastLogIndex int 		//index of the last log entry
-	lastLogTerm int      //last term stored in its log
+	Term int				//Term for which it is candidate for election
+	CandidateID int         // ID of the server requesting a vote
+	LastLogIndex int 		//Index of the last Log entry
+	LastLogTerm int      //last Term stored in its Log
 }
 
 type VoteResponse struct{
-	from int           //to know from where the vote is received
-	term int
-	voteGranted int     //-1 if not voted, 0 if no and 1 if yes
+	From int           //To know From where the vote is received
+	Term int
+	VoteGranted int     //-1 if not voted, 0 if no and 1 if yes
 }
 
 type AppendEntriesRequest struct{
-	term int
-	leaderID int
-	prevLogIndex int
-	prevLogTerm int
-	log []Log
-	leaderCommit int
+	Term int
+	LeaderID int
+	PrevLogIndex int
+	PrevLogTerm int
+	Log []Log
+	LeaderCommit int
 
 }
 
 type AppendEntriesResponse struct{
-	term int
-	success bool
-	from int 		//to know from where the AppendEntriesResponse is received
-	count int 		//to keep track of how many entries were sent
-	lastLogIndex int
+	Term int
+	Success bool
+	From int 		//To know From where the AppendEntriesResponse is received
+	Count int 		//To keep track of how many entries were sent
+	LastLogIndex int
 }
 type Append struct{
-	data []byte
+	Data []byte
 
 }
 type Timeout struct{
@@ -77,31 +79,31 @@ type Action interface{
 }
 
 type Send struct{
-	to int
-	event interface{ }
+	To int
+	Event interface{ }
 	
 }
 
 type Commit struct{
-	index int
-	data []byte
-	err string
+	Index int
+	Data []byte
+	Err error
 
 }
 
 type Alarm struct{
-	time int 
+	Time time.Time 
 }
 
 type LogStore struct{
-	index int
-	data []byte
+	Index int
+	Data []byte
 
 }
 
 type  StateStore struct{
-	term int
-	votedFor int
+	Term int
+	VotedFor int
 }
 
 
@@ -111,168 +113,226 @@ type  StateStore struct{
 
 func onVoteRequest(obj VoteRequest,s *RaftStateMachine) []Action{
 
+
+
+
 	action:=make([]Action,0)
 
-	if (s.state=="follower"){
+	if (s.State=="follower"){
 
-		if(s.term>obj.term){
-			//follower gets the request for lower order term
+		if(s.Term>obj.Term){
+			//follower gets the request for lower order Term
 			//reject the vote
 
-			action=append(action,Send{to: obj.candidateID,event:VoteResponse{from:s.myID, term: s.term,voteGranted: 0}})
+			action=append(action,Send{To: obj.CandidateID,Event:VoteResponse{From:s.MyID, Term: s.Term,VoteGranted: 0}})
 
 
-		} else if (s.term==obj.term){
-			//term of follower and candidate are equal
+		} else if (s.Term==obj.Term){
+			//Term of follower and candidate are equal
 
-			if(s.log[len(s.log)-1].term>obj.lastLogTerm){
+			if(s.Log[len(s.Log)-1].Term>obj.LastLogTerm){
 				//reject the vote
-				action=append(action,Send{to: obj.candidateID,event:VoteResponse{from:s.myID, term: s.term,voteGranted: 0}})
+				action=append(action,Send{To: obj.CandidateID,Event:VoteResponse{From:s.MyID, Term: s.Term,VoteGranted: 0}})
 
-			} else if (s.log[len(s.log)-1].term==obj.lastLogTerm && len(s.log)-1>obj.lastLogIndex) {
+			} else if (s.Log[len(s.Log)-1].Term==obj.LastLogTerm && len(s.Log)-1>obj.LastLogIndex) {
 				//follower is more knowledgeable than candidate
 				//reject the vote
 				
-				action=append(action,Send{to: obj.candidateID,event:VoteResponse{from:s.myID, term: s.term,voteGranted: 0}})
+				action=append(action,Send{To: obj.CandidateID,Event:VoteResponse{From:s.MyID, Term: s.Term,VoteGranted: 0}})
 				
 			} else{
 
-				if (s.votedFor==-1 || s.votedFor==obj.candidateID){
-				s.term=obj.term
-				s.votedFor=obj.candidateID
+				if (s.VotedFor==-1 || s.VotedFor==obj.CandidateID){
+				s.Term=obj.Term
+				s.VotedFor=obj.CandidateID
 
 
-				action=append(action,StateStore{term:s.term,votedFor:obj.candidateID})
+
+				for i := 0; i < len(s.VoteReceived); i++ {
+
+					s.VoteReceived[i]=-1
+
+				}
+
+				action=append(action,StateStore{Term:s.Term,VotedFor:obj.CandidateID})
 
 				//grant the vote
 				
-				action=append(action,Send{to: obj.candidateID,event:VoteResponse{from:s.myID,term: s.term,voteGranted: 1}})
+				action=append(action,Send{To: obj.CandidateID,Event:VoteResponse{From:s.MyID,Term: s.Term,VoteGranted: 1}})
 				
 
 				}else{
 
-				//follower has already given vote to another candidate so reject the vote
-				action=append(action,Send{to: obj.candidateID,event:VoteResponse{from:s.myID,term: s.term,voteGranted: 0}})
+				//follower has already given vote To another candidate so reject the vote
+				action=append(action,Send{To: obj.CandidateID,Event:VoteResponse{From:s.MyID,Term: s.Term,VoteGranted: 0}})
 				}
 			}
 
-		} else if (s.term < obj.term) {
+		} else if (s.Term < obj.Term) {
 
-			if(s.log[len(s.log)-1].term>obj.lastLogTerm){
+			if(s.Log[len(s.Log)-1].Term>obj.LastLogTerm){
 
 				
-				s.term=obj.term
-				s.votedFor=-1
+				s.Term=obj.Term
+				s.VotedFor=-1
 
-				action=append(action,StateStore{term:s.term,votedFor:s.votedFor})
+				for i := 0; i < len(s.VoteReceived); i++ {
+
+					s.VoteReceived[i]=-1
+				}
+
+
+				action=append(action,StateStore{Term:s.Term,VotedFor:s.VotedFor})
 				//reject the vote
 
-				action=append(action,Send{to: obj.candidateID,event:VoteResponse{from:s.myID, term: s.term,voteGranted: 0}})
+				action=append(action,Send{To: obj.CandidateID,Event:VoteResponse{From:s.MyID, Term: s.Term,VoteGranted: 0}})
 
-			}else if (s.log[len(s.log)-1].term==obj.lastLogTerm && len(s.log)-1>obj.lastLogIndex) {
-				//follower has more log entries than candidate
+			}else if (s.Log[len(s.Log)-1].Term==obj.LastLogTerm && len(s.Log)-1>obj.LastLogIndex) {
+				//follower has more Log entries than candidate
 				
-				s.term=obj.term
-				s.votedFor=-1
+				s.Term=obj.Term
+				s.VotedFor=-1
 
-				action=append(action,StateStore{term:s.term,votedFor:s.votedFor})
+				for i := 0; i < len(s.VoteReceived); i++ {
+					s.VoteReceived[i]=-1
+
+				}
+
+
+				action=append(action,StateStore{Term:s.Term,VotedFor:s.VotedFor})
 
 				//reject the vote
 
-				action=append(action,Send{to: obj.candidateID,event:VoteResponse{from:s.myID, term: s.term,voteGranted: 0}})
+				action=append(action,Send{To: obj.CandidateID,Event:VoteResponse{From:s.MyID, Term: s.Term,VoteGranted: 0}})
 				
 			} else{
 
-				if (s.votedFor==-1 || s.votedFor==obj.candidateID){
-				s.term=obj.term
-				s.votedFor=obj.candidateID
+				if (s.VotedFor==-1 || s.VotedFor==obj.CandidateID){
+				s.Term=obj.Term
+				s.VotedFor=obj.CandidateID
 
-				action=append(action,StateStore{term:s.term,votedFor:obj.candidateID})
+				for i := 0; i < len(s.VoteReceived); i++ {
+
+					s.VoteReceived[i]=-1
+
+				}
+
+
+				action=append(action,StateStore{Term:s.Term,VotedFor:obj.CandidateID})
 
 				//grant the vote
 				
-				action=append(action,Send{to: obj.candidateID,event:VoteResponse{from:s.myID,term: s.term,voteGranted: 1}})
+				action=append(action,Send{To: obj.CandidateID,Event:VoteResponse{From:s.MyID,Term: s.Term,VoteGranted: 1}})
 				
 
 				}else{
-				//follower has already given vote to another candidate so reject the vote
-				s.term=obj.term
-				s.votedFor=-1
+				//follower has already given vote To another candidate so reject the vote
+				s.Term=obj.Term
+				s.VotedFor=-1
 
-				action=append(action,StateStore{term:s.term,votedFor:s.votedFor})
+
+				for i := 0; i < len(s.VoteReceived); i++ {
+
+					s.VoteReceived[i]=-1
+				}
+
+				action=append(action,StateStore{Term:s.Term,VotedFor:s.VotedFor})
 
 				//reject the vote
 
-				action=append(action,Send{to: obj.candidateID,event:VoteResponse{from:s.myID,term: s.term,voteGranted: 0}})
+				action=append(action,Send{To: obj.CandidateID,Event:VoteResponse{From:s.MyID,Term: s.Term,VoteGranted: 0}})
 				}
 			}
 
 			
 		}
 			
-	}else if (s.state=="candidate" || s.state=="leader") {
-		if (s.term<obj.term) {
+	}else if (s.State=="candidate" || s.State=="leader") {
+		if (s.Term<obj.Term) {
 
-			s.state="follower"
+			s.State="follower"
 
 
-			if(s.log[len(s.log)-1].term>obj.lastLogTerm){
+			if(s.Log[len(s.Log)-1].Term>obj.LastLogTerm){
 
 				
-				s.term=obj.term
-				s.votedFor=-1
+				s.Term=obj.Term
+				s.VotedFor=-1
 
-				action=append(action,StateStore{term:s.term,votedFor:s.votedFor})
+				for i := 0; i < len(s.VoteReceived); i++ {
+
+					s.VoteReceived[i]=-1
+				}
+
+
+				action=append(action,StateStore{Term:s.Term,VotedFor:s.VotedFor})
 				//reject the vote
 
-				action=append(action,Send{to: obj.candidateID,event:VoteResponse{from:s.myID, term: s.term,voteGranted: 0}})
+				action=append(action,Send{To: obj.CandidateID,Event:VoteResponse{From:s.MyID, Term: s.Term,VoteGranted: 0}})
 
-			}else if (s.log[len(s.log)-1].term==obj.lastLogTerm && len(s.log)-1>obj.lastLogIndex) {
-				//follower has more log entries than candidate
+			}else if (s.Log[len(s.Log)-1].Term==obj.LastLogTerm && len(s.Log)-1>obj.LastLogIndex) {
+				//follower has more Log entries than candidate
 
 				
-				s.term=obj.term
-				s.votedFor=-1
+				s.Term=obj.Term
+				s.VotedFor=-1
 
-				action=append(action,StateStore{term:s.term,votedFor:s.votedFor})
+				for i := 0; i < len(s.VoteReceived); i++ {
+
+					s.VoteReceived[i]=-1
+				}
+
+				action=append(action,StateStore{Term:s.Term,VotedFor:s.VotedFor})
 
 				//reject the vote
 
-				action=append(action,Send{to: obj.candidateID,event:VoteResponse{from:s.myID, term: s.term,voteGranted: 0}})
+				action=append(action,Send{To: obj.CandidateID,Event:VoteResponse{From:s.MyID, Term: s.Term,VoteGranted: 0}})
 				
-			} else{
+			} else{	
 
 
-				if (s.votedFor==-1 || s.votedFor==obj.candidateID){
-				s.term=obj.term
-				s.votedFor=obj.candidateID
+				if (s.VotedFor==-1 || s.VotedFor==obj.CandidateID){
+				s.Term=obj.Term
+				s.VotedFor=obj.CandidateID
 
-				action=append(action,StateStore{term:s.term,votedFor:obj.candidateID})
+				for i := 0; i < len(s.VoteReceived); i++ {
+
+					s.VoteReceived[i]=-1
+
+				}
+
+				action=append(action,StateStore{Term:s.Term,VotedFor:obj.CandidateID})
 
 				//grant the vote
 				
-				action=append(action,Send{to: obj.candidateID,event:VoteResponse{from:s.myID,term: s.term,voteGranted: 1}})
+				action=append(action,Send{To: obj.CandidateID,Event:VoteResponse{From:s.MyID,Term: s.Term,VoteGranted: 1}})
 				
 
 				}else{
 
-				//follower has already given vote to another candidate so reject the vote
-				s.term=obj.term
-				s.votedFor=-1
+				//follower has already given vote To another candidate so reject the vote
+				s.Term=obj.Term
+				s.VotedFor=-1
 
-				action=append(action,StateStore{term:s.term,votedFor:s.votedFor})
+				for i := 0; i < len(s.VoteReceived); i++ {
+
+					s.VoteReceived[i]=-1
+
+				}
+
+				action=append(action,StateStore{Term:s.Term,VotedFor:s.VotedFor})
 
 				//reject the vote
 
-				action=append(action,Send{to: obj.candidateID,event:VoteResponse{from:s.myID,term: s.term,voteGranted: 0}})
+				action=append(action,Send{To: obj.CandidateID,Event:VoteResponse{From:s.MyID,Term: s.Term,VoteGranted: 0}})
 				}
 			}
 
 
-		} else if (s.term>=obj.term) {
+		} else if (s.Term>=obj.Term) {
 			//reject the vote
 			
-			action=append(action,Send{to: obj.candidateID,event:VoteResponse{from:s.myID,term: s.term,voteGranted: 0}})
+			action=append(action,Send{To: obj.CandidateID,Event:VoteResponse{From:s.MyID,Term: s.Term,VoteGranted: 0}})
 			
 		}
 
@@ -281,65 +341,79 @@ return action
 }
 
 func onVoteResponse(obj VoteResponse,s *RaftStateMachine) []Action{
+	
 
-	var majority,count0,count1 int
-	majority= (len(s.peerID)+1)/2
-	count0=0
-	count1=1
+	var majority,Count0,Count1 int
+	majority= (len(s.PeerID)+1)/2
+	Count0=0
+	Count1=1
 	action:=make([]Action,0)
 	myLog := make([]Log,0)
 
-	if (s.state=="follower") {
+	if (s.State=="follower") {
 
-		//follower is not supposed to handle VoteResponse 
+		//follower is not supposed To handle VoteResponse 
 
-		//update term if any higher order term
+		//update Term if any higher order Term
 
-		if(s.term<obj.term){
-			s.term=obj.term
-			action=append(action,StateStore{term:s.term,votedFor:-1})
+		if(s.Term<obj.Term){
+			s.Term=obj.Term
+
+
+			for i := 0; i < len(s.VoteReceived); i++ {
+
+				s.VoteReceived[i]=-1
+			}
+			action=append(action,StateStore{Term:s.Term,VotedFor:-1})
 
 		}
 
-	} else if (s.state=="leader") {
+	} else if (s.State=="leader") {
 		
-		//if leader gets a VoteResponse it will just ignore it and it has already changed itself from candidate to leader, it cannot get VoteResponse from any higher order term
+		//if leader gets a VoteResponse it will just ignore it and it has already changed itself From candidate To leader, it cannot get VoteResponse From any higher order Term
 
-	}else if (s.state=="candidate") {
+	}else if (s.State=="candidate") {
 
-		if(obj.term==s.term){
-			s.voteReceived[obj.from-1]=obj.voteGranted
+		if(obj.Term==s.Term){
+				
+			s.VoteReceived[obj.From-1]=obj.VoteGranted
 
-			for i := 1; i < len(s.voteReceived); i++ {
-				if(s.voteReceived[i]==1){
+			for i := 0; i < len(s.VoteReceived); i++ {
+				if(s.VoteReceived[i]==1){
 					
-					count1++
+					Count1++
 					
-				}else if (s.voteReceived[i]==0) {
+				}else if (s.VoteReceived[i]==0) {
 					
-					count0++
+					Count0++
 				}
 
-				if(count1==majority){
-				
-					s.leaderID=s.myID
-					s.state="leader"
-					//send empty append entries request
+				if(Count1==majority){
 
+					s.LeaderID=s.MyID
+					s.State="leader"
+
+				
+
+					//send empty append entries request
+					myLog=make([]Log,0)
+
+					for i := 0; i < len(s.PeerID); i++ {
 					
-					for i := 0; i < len(s.peerID); i++ {
-		
-						action=append(action, Send{to:s.peerID[i], event:AppendEntriesRequest{log:myLog,term:s.term,leaderID:s.myID}})
+
+						action=append(action, Send{To:s.PeerID[i], Event:AppendEntriesRequest{Log:myLog,Term:s.Term,LeaderID:s.MyID}})
 						
 
 					}
 			
-					action=append(action,Alarm{25})
+				//	action=append(action,Alarm{Time: time.Now().Add(time.Duration(100) * time.Millisecond) })
+					action=append(action,Alarm{Time: time.Now().Add(time.Duration(10) * time.Millisecond) })
+					
 					break
 
-				} else if (count0==majority) {
-					s.state="follower"
-					action=append(action,Alarm{25})
+				} else if (Count0==majority) {
+					s.State="follower"
+					action=append(action,Alarm{Time: time.Now().Add(time.Duration(10) * time.Millisecond) })
 					break
 				}
 				
@@ -352,66 +426,85 @@ func onVoteResponse(obj VoteResponse,s *RaftStateMachine) []Action{
 	return action
 }
 
-func onApendEntriesRequest(obj AppendEntriesRequest,s *RaftStateMachine)[]Action {
+func onAppendEntriesRequest(obj AppendEntriesRequest,s *RaftStateMachine)[]Action {
 
 	action:=make([]Action,0)
 
-	if(s.state=="follower"){
+	if(s.State=="follower"){
 
-		if(s.term>obj.term){
+		if len(obj.Log)==0 {
+			s.LeaderID=obj.LeaderID
+
+
+			if obj.LeaderCommit > s.CommitIndex {
+					
+						s.CommitIndex = minimum(obj.LeaderCommit,obj.PrevLogIndex + 1)
+					
+						action = append(action, Commit{Index: s.CommitIndex, Data: s.Log[s.CommitIndex].Data})
+					}
+
+			return action
+		}
+
+		if(s.Term>obj.Term){
+
+
 			
 
-			action=append(action,Send{to: obj.leaderID,event:AppendEntriesResponse{term: s.term,success: false,from:s.myID}})
+			action=append(action,Send{To: obj.LeaderID,Event:AppendEntriesResponse{Term: s.Term,Success: false,From:s.MyID}})
 
 		}else{
 			
 			
 
-			if(len(s.log)-1!=obj.prevLogIndex){
 
-				//different last log index then do not append
 
-				action=append(action,Send{to: obj.leaderID,event:AppendEntriesResponse{term: s.term,success: false,from:s.myID}})
+			if(len(s.Log)-1!=obj.PrevLogIndex){
+
+				
+
+				//different last Log Index then do not append
+
+				action=append(action,Send{To: obj.LeaderID,Event:AppendEntriesResponse{Term: s.Term,Success: false,From:s.MyID}})
 
 			} else {
 				
-				if( obj.prevLogIndex != -1 && len(s.log) != 0 && s.log[len(s.log)-1].term != obj.prevLogTerm){
+				if( obj.PrevLogIndex != -1 && len(s.Log) != 0 && s.Log[len(s.Log)-1].Term != obj.PrevLogTerm){
+
 					
-					// last log index matches but different terms at last Index
-					action=append(action,Send{to: obj.leaderID,event:AppendEntriesResponse{term: s.term,success: false,from:s.myID}})
+					// last Log Index matches but different Terms at last Index
+					action=append(action,Send{To: obj.LeaderID,Event:AppendEntriesResponse{Term: s.Term,Success: false,From:s.MyID}})
 
 				}else{
 
-					
-					//delete entries from lastLogIndex and then append
+					//delete entries From LastLogIndex and then append
 
-					index := obj.prevLogIndex + 1
+					Index := obj.PrevLogIndex + 1
 					
 
-					if len(obj.log) > 0 {
+					if len(obj.Log) > 0 {
 				
-						action = append(action, LogStore{index: index, data: obj.log[obj.prevLogIndex+1].data})
-						s.log = append(s.log, obj.log...)
+						s.Log=s.Log[:Index]
+						s.Log = append(s.Log, obj.Log...)
 					}
 
-					s.leaderID = obj.leaderID
-					//update term and voted for if term in append entry rpc is greater than follower current term
-					if obj.term > s.term {
-						s.term = obj.term
-						s.votedFor = -1
+					s.LeaderID = obj.LeaderID
+					//update Term and voted for if Term in append entry rpc is greater than follower current Term
+					if obj.Term > s.Term {
+						s.Term = obj.Term
+						s.VotedFor = -1
 						
-						action = append(action, StateStore{term: s.term, votedFor: s.votedFor})
+						action = append(action, StateStore{Term: s.Term, VotedFor: s.VotedFor})
 					}
 					
-					if obj.leaderCommit > s.commitIndex {
+					if obj.LeaderCommit > s.CommitIndex {
 					
-						s.commitIndex = minimum(obj.leaderCommit, index-1)
+						s.CommitIndex = minimum(obj.LeaderCommit, Index-1)
 
-						
-						action = append(action, Commit{index: s.commitIndex, data: s.log[s.commitIndex].data})
+						action = append(action, Commit{Index: s.CommitIndex, Data: s.Log[s.CommitIndex].Data})
 					}
 
-					action = append(action, Send{to: obj.leaderID, event: AppendEntriesResponse{term: s.term, success: true,from:s.myID}})
+					action = append(action, Send{To: obj.LeaderID, Event: AppendEntriesResponse{Term: s.Term, Success: true,From:s.MyID,LastLogIndex:len(s.Log)-1}})
 
 
 				}
@@ -420,61 +513,61 @@ func onApendEntriesRequest(obj AppendEntriesRequest,s *RaftStateMachine)[]Action
 				 
 		}
 
-	} else if (s.state=="candidate") {
+	} else if (s.State=="candidate") {
 
 		
-		if (obj.term<s.term) {
+		if (obj.Term<s.Term) {
 
-			action=append(action,Send{to: obj.leaderID,event:AppendEntriesResponse{term: s.term,success: false,from:s.myID}})
+			action=append(action,Send{To: obj.LeaderID,Event:AppendEntriesResponse{Term: s.Term,Success: false,From:s.MyID}})
 			
-		}else if(obj.term == s.term) {
+		}else if(obj.Term == s.Term) {
 
-			if(len(s.log)-1!=obj.prevLogIndex){
+			if(len(s.Log)-1!=obj.PrevLogIndex){
 
-				//different last log index then do not append
+				//different last Log Index then do not append
 
-				action=append(action,Send{to: obj.leaderID,event:AppendEntriesResponse{term: s.term,success: false,from:s.myID}})
+				action=append(action,Send{To: obj.LeaderID,Event:AppendEntriesResponse{Term: s.Term,Success: false,From:s.MyID}})
 
 			} else {
 				
-				if( obj.prevLogIndex != -1 && len(s.log) != 0 && s.log[len(s.log)-1].term != obj.prevLogTerm){
+				if( obj.PrevLogIndex != -1 && len(s.Log) != 0 && s.Log[len(s.Log)-1].Term != obj.PrevLogTerm){
 					
-					// last log index matches but different terms at last Index
-					action=append(action,Send{to: obj.leaderID,event:AppendEntriesResponse{term: s.term,success: false,from:s.myID}})
+					// last Log Index matches but different Terms at last Index
+					action=append(action,Send{To: obj.LeaderID,Event:AppendEntriesResponse{Term: s.Term,Success: false,From:s.MyID}})
 
 				}else{
 
-					//delete entries from lastLogIndex and then append
+					//delete entries From LastLogIndex and then append
 
-					index := obj.prevLogIndex + 1
+					Index := obj.PrevLogIndex + 1
 					
 
-					if len(obj.log) > 0 {
+					if len(obj.Log) > 0 {
 				
-						action = append(action, LogStore{index: index, data: obj.log[obj.prevLogIndex+1].data})
-						s.log = append(s.log, obj.log...)
+						action = append(action, LogStore{Index: Index, Data: obj.Log[obj.PrevLogIndex+1].Data})
+						s.Log = append(s.Log, obj.Log...)
 					}
 
-					s.leaderID = obj.leaderID
-					//update term and voted for if term in append entry rpc is greater than follower current term
-					if obj.term > s.term {
-						s.term = obj.term
-						s.votedFor = -1
+					s.LeaderID = obj.LeaderID
+					//update Term and voted for if Term in append entry rpc is greater than follower current Term
+					if obj.Term > s.Term {
+						s.Term = obj.Term
+						s.VotedFor = -1
 						
-						action = append(action, StateStore{term: s.term, votedFor: s.votedFor})
+						action = append(action, StateStore{Term: s.Term, VotedFor: s.VotedFor})
 					}
 					
-					if obj.leaderCommit > s.commitIndex {
+					if obj.LeaderCommit > s.CommitIndex {
 					
-						s.commitIndex = minimum(obj.leaderCommit, index-1)
+						s.CommitIndex = minimum(obj.LeaderCommit, Index-1)
 
 						
-						action = append(action, Commit{index: s.commitIndex, data: s.log[s.commitIndex].data})
+						action = append(action, Commit{Index: s.CommitIndex, Data: s.Log[s.CommitIndex].Data})
 					}
 
 
-					action = append(action, Send{to: obj.leaderID, event: AppendEntriesResponse{term: s.term, success: true,from:s.myID}})
-					s.state="follower"
+					action = append(action, Send{To: obj.LeaderID, Event: AppendEntriesResponse{Term: s.Term, Success: true,From:s.MyID}})
+					s.State="follower"
 
 
 				}
@@ -484,52 +577,59 @@ func onApendEntriesRequest(obj AppendEntriesRequest,s *RaftStateMachine)[]Action
 
 		}else{
 	
-		//when obj.term > s.term
-				s.term=obj.term
-				s.votedFor=-1
-				s.state="follower"
-				action = append(action, StateStore{term: s.term, votedFor: s.votedFor})
+		//when obj.Term > s.Term
+				s.Term=obj.Term
+				s.VotedFor=-1
+
+				for i := 0; i < len(s.VoteReceived); i++ {
+
+					s.VoteReceived[i]=-1
+
+				}
+
+				s.State="follower"
+				action = append(action, StateStore{Term: s.Term, VotedFor: s.VotedFor})
 
 			
-			if(len(s.log)-1!=obj.prevLogIndex){
+			if(len(s.Log)-1!=obj.PrevLogIndex){
 
-				//different last log index then do not append
+				//different last Log Index then do not append
 
-				action=append(action,Send{to: obj.leaderID,event:AppendEntriesResponse{term: s.term,success: false,from:s.myID}})
+				action=append(action,Send{To: obj.LeaderID,Event:AppendEntriesResponse{Term: s.Term,Success: false,From:s.MyID}})
 
 			} else {
 				
-				if( obj.prevLogIndex != -1 && len(s.log) != 0 && s.log[len(s.log)-1].term != obj.prevLogTerm){
+				if( obj.PrevLogIndex != -1 && len(s.Log) != 0 && s.Log[len(s.Log)-1].Term != obj.PrevLogTerm){
 					
-					// last log index matches but different terms at last Index
-					action=append(action,Send{to: obj.leaderID,event:AppendEntriesResponse{term: s.term,success: false,from:s.myID}})
+					// last Log Index matches but different Terms at last Index
+					action=append(action,Send{To: obj.LeaderID,Event:AppendEntriesResponse{Term: s.Term,Success: false,From:s.MyID}})
 
 				}else{
 
 					
-					//delete entries from lastLogIndex and then append
+					//delete entries From LastLogIndex and then append
 
-					index := obj.prevLogIndex + 1
+					Index := obj.PrevLogIndex + 1
 					
 
-					if len(obj.log) > 0 {
+					if len(obj.Log) > 0 {
 				
-						action = append(action, LogStore{index: index, data: obj.log[obj.prevLogIndex+1].data})
-						s.log = append(s.log, obj.log...)
+						action = append(action, LogStore{Index: Index, Data: obj.Log[obj.PrevLogIndex+1].Data})
+						s.Log = append(s.Log, obj.Log...)
 					}
 
-					s.leaderID = obj.leaderID
+					s.LeaderID = obj.LeaderID
 					
-					if obj.leaderCommit > s.commitIndex {
+					if obj.LeaderCommit > s.CommitIndex {
 					
-						s.commitIndex = minimum(obj.leaderCommit, index-1)
+						s.CommitIndex = minimum(obj.LeaderCommit, Index-1)
 
 						
-						action = append(action, Commit{index: s.commitIndex, data: s.log[s.commitIndex].data})
+						action = append(action, Commit{Index: s.CommitIndex, Data: s.Log[s.CommitIndex].Data})
 					}
 
 
-					action = append(action, Send{to: obj.leaderID, event: AppendEntriesResponse{term: s.term, success: true,from:s.myID}})
+					action = append(action, Send{To: obj.LeaderID, Event: AppendEntriesResponse{Term: s.Term, Success: true,From:s.MyID}})
 					
 
 
@@ -539,19 +639,24 @@ func onApendEntriesRequest(obj AppendEntriesRequest,s *RaftStateMachine)[]Action
 
 		}
 	}else{
-		//s.state=leader
+		//s.State=leader
 
-		//getting request for higher order term
-		if(s.term<obj.term){
-			s.state="follower"
-			s.term=obj.term
-			s.votedFor=-1
+		//getting request for higher order Term
+		if(s.Term<obj.Term){
+			s.State="follower"
+			s.Term=obj.Term
+			s.VotedFor=-1
 
-			action = append(action, StateStore{term: s.term, votedFor: s.votedFor})
+			for i := 0; i < len(s.VoteReceived); i++ {
+
+				s.VoteReceived[i]=-1
+			}
+
+			action = append(action, StateStore{Term: s.Term, VotedFor: s.VotedFor})
 
 		}
 
-		//leader cannot get request from same order or higher order term
+		//leader cannot get request From same order or higher order Term
 
 	}
 
@@ -563,82 +668,101 @@ func onApendEntriesRequest(obj AppendEntriesRequest,s *RaftStateMachine)[]Action
 func onAppendEntriesResponse(obj AppendEntriesResponse, s *RaftStateMachine)[]Action {
 	
 	action:=make([]Action,0)
-	if(s.state=="follower"){
-		if (s.term < obj.term) {
-			s.term=obj.term
-			s.votedFor=-1
+	if(s.State=="follower"){
+		if (s.Term < obj.Term) {
+			s.Term=obj.Term
+			s.VotedFor=-1
 
-			action = append(action, StateStore{term: s.term, votedFor: s.votedFor})
+			for i := 0; i < len(s.VoteReceived); i++ {
+
+				s.VoteReceived[i]=-1
+
+			}
+
+			action = append(action, StateStore{Term: s.Term, VotedFor: s.VotedFor})
 		}
-	}else if (s.state=="candidate") {
+	}else if (s.State=="candidate") {
 
-		if (s.term < obj.term) {
-			s.term=obj.term
-			s.votedFor=-1
+		if (s.Term < obj.Term) {
+			s.Term=obj.Term
+			s.VotedFor=-1
 
-			action = append(action, StateStore{term: s.term, votedFor: s.votedFor})
+			for i := 0; i < len(s.VoteReceived); i++ {
+
+				s.VoteReceived[i]=-1
+
+			}
+
+			action = append(action, StateStore{Term: s.Term, VotedFor: s.VotedFor})
 		}
 		
 	}else{
-		//s.state=leader
+		//s.State=leader
 
-		if (s.term < obj.term) {
-			s.term=obj.term
-			s.votedFor=-1
+		if (s.Term < obj.Term) {
+			s.Term=obj.Term
+			s.VotedFor=-1
+
+
+			for i := 0; i < len(s.VoteReceived); i++ {
+
+				s.VoteReceived[i]=-1
+			}
 		
-			action = append(action, StateStore{term: s.term, votedFor: s.votedFor})
+			action = append(action, StateStore{Term: s.Term, VotedFor: s.VotedFor})
 		}else{
 
-					//checking if appendrequest was successfull
-			if(obj.success==false){
-				//decrease nextIndex 
+					//checking if appendrequest was Successfull
+			if(obj.Success==false){
+				//decrease NextIndex 
 
-				if(s.nextIndex[obj.from]>1){
+				if(s.NextIndex[obj.From-1]>1){
 
-					s.nextIndex[obj.from]=s.nextIndex[obj.from]-1
+					s.NextIndex[obj.From-1]=s.NextIndex[obj.From-1]-1
 				}
 
 
-				//updating last log index and term
-				newLastIndex:=obj.lastLogIndex-1
+				//updating last Log Index and Term
+				newLastIndex:=obj.LastLogIndex-1
 				newlastTerm:=0
 				if(newLastIndex>=0){
-					newlastTerm=s.log[newLastIndex].term
+					newlastTerm=s.Log[newLastIndex].Term
 				}else{
 					newlastTerm=0
 				}
 
-				//obtaining data from newLastIndex to the length of the log
-				log:=s.log[newLastIndex+1:len(s.log)]
+				//obtaining Data From newLastIndex To the length of the Log
+				Log:=s.Log[newLastIndex+1:len(s.Log)]
 
 				//resending AppendEntriesRequest
 		
-				action = append(action, Send{to: obj.from, event: AppendEntriesRequest{ leaderID: s.leaderID, term: s.term,prevLogIndex: newLastIndex, prevLogTerm: newlastTerm, log: log, leaderCommit: s.commitIndex}})
+				action = append(action, Send{To: obj.From, Event: AppendEntriesRequest{ LeaderID: s.LeaderID, Term: s.Term,PrevLogIndex: newLastIndex, PrevLogTerm: newlastTerm, Log: Log, LeaderCommit: s.CommitIndex}})
 			
 			}else {
-				// AppendEntryRequest successfull
+				// AppendEntryRequest Successfull
 					
-				//updating matchIndex
-				if((obj.lastLogIndex+obj.count)+1>s.matchIndex[obj.from]){
-					s.matchIndex[obj.from]=obj.lastLogIndex+obj.count
+				//updating MatchIndex
+				if((obj.LastLogIndex+obj.Count)+1>s.MatchIndex[obj.From]){
+					s.MatchIndex[obj.From]=obj.LastLogIndex+obj.Count
 
 				}
 
-				// sorting matchIndex and storing in new array to find whether the entries can be commited
-				newmatchIndex := make([]int, len(s.peerID)-1)
-				copy(newmatchIndex, s.matchIndex)
-				sort.IntSlice(newmatchIndex).Sort()
+				// sorting MatchIndex and storing in new array To find whether the entries can be commited
+				newMatchIndex := make([]int, len(s.PeerID)-1)
+				copy(newMatchIndex, s.MatchIndex)
+				sort.IntSlice(newMatchIndex).Sort()
 
 
-				//commit is found by looking the matchIndexes and finding which is present on the majority
+				//commit is found by looking the MatchIndexes and finding which is present on the majority
 			
 
-				newCommit:=newmatchIndex[(len(s.peerID)-1)/2]     // for 5 servers looking the last second entry
+				newCommit:=newMatchIndex[(len(s.PeerID)-1)/2]     // for 5 servers looking the last second entry
 
-				//the entry is commited only if it is present on majority and for the same term
-				if(newCommit>s.commitIndex && s.log[newCommit].term==s.term){
-					s.commitIndex=newCommit
-					action = append(action,Commit{index:s.commitIndex,data:[]byte("")})
+				//the entry is commited only if it is present on majority and for the same Term
+				if(newCommit>s.CommitIndex && s.Log[newCommit].Term==s.Term){
+					s.CommitIndex=newCommit
+
+					action = append(action,Commit{Index:s.CommitIndex,Data:s.Log[obj.LastLogIndex].Data})
 
 				}
 				
@@ -655,44 +779,50 @@ return action
 
 func onTimeout(obj Timeout,s *RaftStateMachine) []Action{
 	
-
 	action:=make([]Action,0)
 
-	if (s.state=="follower" || s.state=="candidate") {
-		s.state="candidate"
+	if (s.State=="follower" || s.State=="candidate") {
+		s.State="candidate"
 
-		//increment the term
-		s.term=s.term+1
+		//increment the Term
+		s.Term=s.Term+1
 
 		//vote for self
-		s.votedFor=s.myID
-		action=append(action,StateStore{term:s.term,votedFor:s.myID})
+		s.VotedFor=s.MyID
+
+
+		for i := 0; i < len(s.VoteReceived); i++ {
+
+			s.VoteReceived[i]=-1
+
+		}
+
+		action=append(action,StateStore{Term:s.Term,VotedFor:s.MyID})
 
 		//reset election timer
 		
-		action=append(action,Alarm{time: 25 })
+		action=append(action,Alarm{Time: time.Now().Add(time.Duration(100) * time.Millisecond) })
 
-        //send VoteRequests to everyone
-		for i := 0; i < len(s.peerID); i++ {
+        //send VoteRequests To everyone
+		for i := 0; i < len(s.PeerID); i++ {
 		
-			action=append(action, Send{to:s.peerID[i], event:VoteRequest{term:s.term , candidateID:s.myID, lastLogIndex:len(s.log)-1, lastLogTerm:s.log[len(s.log)-1].term}})
+			action=append(action, Send{To:s.PeerID[i], Event:VoteRequest{Term:s.Term , CandidateID:s.MyID, LastLogIndex:len(s.Log)-1, LastLogTerm:s.Log[len(s.Log)-1].Term}})
 			
 		}
 
 	
 	} else{
-		//s.state=leader
+		//s.State=leader
 
 	
-
 		myLog := make([]Log,0)
 
-		action=append(action,Alarm{time: 25 })
+		action=append(action,Alarm{Time: time.Now().Add(time.Duration(100) * time.Millisecond) })
 
 		//send empty append entries request
-		for i := 0; i < len(s.peerID); i++ {
-		
-			action=append(action, Send{to:s.peerID[i], event:AppendEntriesRequest{log:myLog,term:s.term}})
+		for i := 0; i < len(s.PeerID); i++ {
+
+			action=append(action, Send{To:s.PeerID[i], Event:AppendEntriesRequest{Log:myLog,Term:s.Term,LeaderID:s.LeaderID,LeaderCommit:s.CommitIndex}})
 			
 		}
 		
@@ -705,26 +835,33 @@ return action
 
 func onAppend(obj Append,s *RaftStateMachine)[]Action{
 
+	
 action:=make([]Action,0)
 
-	if(s.state=="follower" || s.state=="candidate"){
+	if(s.State=="follower" || s.State=="candidate"){
 
 
-		action=append(action,Commit{data:obj.data,err:"leader:"+strconv.Itoa(s.leaderID) })  //as follower or candidate cannot append to log send leaderID to the client
+		action=append(action,Commit{Data:obj.Data,Err:errors.New("leader:"+strconv.Itoa(s.LeaderID)) })  //as follower or candidate cannot append To Log send LeaderID To the client
 		
 
 	}else{
 		
-			length:=len(s.log)
+			length:=len(s.Log)
 
-			s.log=append(s.log,Log{s.term,obj.data})
+			newLog:= make([]Log,0)
+
+
+			s.Log=append(s.Log,Log{s.Term,obj.Data})
+			newLog=append(newLog,Log{s.Term,obj.Data})
 		
-			action = append(action, LogStore{index: length, data: s.log[length].data})
+			action = append(action, LogStore{Index: length, Data: s.Log[length].Data})
+
+		
 
 			//send empty append entries request
-			for i := 0; i < len(s.peerID); i++ {
+			for i := 0; i < len(s.PeerID); i++ {
 		
-				action=append(action, Send{to:s.peerID[i], event:AppendEntriesRequest{log:s.log,term:s.term}})
+				action=append(action, Send{To:s.PeerID[i], Event:AppendEntriesRequest{Log:newLog,Term:s.Term,PrevLogIndex:len(s.Log)-2,PrevLogTerm:s.Log[len(s.Log)-2].Term,LeaderID:s.LeaderID}})
 			
 		}
 
@@ -743,11 +880,11 @@ func (s *RaftStateMachine) ProcessEvent(getEvent interface{}) []Action{
 
 		switch getEvent.(type){
 		case VoteRequest:
-			objVoteRequest:=getEvent.(VoteRequest)		//creating object of type VoteRequest from the event
+			objVoteRequest:=getEvent.(VoteRequest)		//creating object of type VoteRequest From the Event
 			action=onVoteRequest(objVoteRequest,s)
 		case AppendEntriesRequest:
-			objAppendEntriesRequest:=getEvent.(AppendEntriesRequest)		//creating object of type AppendEntriesRequest from the event
-			action=onApendEntriesRequest(objAppendEntriesRequest,s)
+			objAppendEntriesRequest:=getEvent.(AppendEntriesRequest)		//creating object of type AppendEntriesRequest From the Event
+			action=onAppendEntriesRequest(objAppendEntriesRequest,s)
 		case Timeout:
 			objTimeout:=getEvent.(Timeout)
 			action=onTimeout(objTimeout,s)
