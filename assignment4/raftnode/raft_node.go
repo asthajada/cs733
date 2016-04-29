@@ -373,9 +373,9 @@ func New (config Config) *RaftNode {
 	mypeers:=make([]int,noOfServers)
 	myLog := make([]Log,0)
 	myLog=append(myLog,Log{0,[]byte("hello")})
-	mynextIndex:=make([]int,noOfServers+1)
-	mymatchIndex:=make([]int,noOfServers+1)
-	myVoteReceived:=make([]int,noOfServers+1)
+	mynextIndex:=make([]int,noOfServers)
+	mymatchIndex:=make([]int,noOfServers)
+	myVoteReceived:=make([]int,noOfServers)
 
 	fmt.Println("-------------")
 

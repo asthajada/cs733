@@ -17,6 +17,8 @@ import (
 
 var crlf = []byte{'\r', '\n'}
 
+var configObjGlobal *raftnode.Config
+
 type HandleClient struct {
 	raftnode *raftnode.RaftNode
 	Port      int
@@ -53,6 +55,8 @@ func NewClient(index int,config raftnode.Config) (ch *HandleClient){
 
 	}
 
+	configObjGlobal = &config
+
 	return ch
 
 
@@ -60,7 +64,7 @@ func NewClient(index int,config raftnode.Config) (ch *HandleClient){
 
 func (ch *HandleClient) run(){
 
-	ch.ExitWaitGr.Add(1)
+	ch.ExitWaitGr.Add(2)
 
 	ch.raftnode.StartRaftNodes()
 
@@ -71,24 +75,7 @@ func (ch *HandleClient) run(){
 	accept,_:=net.ListenTCP("tcp",address)
 
 	go ch.handleCommit() 	
-	/*go func () {
-        CommitLoop:
-        for {
-
-            select {
-            case commitAction, ok := <-ch.raftnode.CommitChannel():
-                if ok {
-                	fmt.Println("got commit action")
-                    ch.handleCommit(commitAction)
-                } else {
-                    break CommitLoop
-                }
-            }
-        }
-        ch.ExitWaitGr.Done()
-    }()
-
-*/
+	
     go func () {
       
         for {
@@ -145,6 +132,8 @@ func  reply(conn *net.TCPConn, msg *filesystem.Msg) bool {
 		resp = "ERR_CMD_ERR"
 	case 'I':
 		resp = "ERR_INTERNAL"
+	case 'R':
+		resp ="ERR_REDIRECT " + msg.RedirectURL 
 	default:
 		fmt.Printf("Unknown response kind '%c'", msg.Kind)
 		return false
@@ -211,35 +200,7 @@ func (ch *HandleClient) serve(conn *net.TCPConn) {
 }
 
 func (ch *HandleClient) handleCommit () {
-  /*  var response *filesystem.Msg
-
-    fmt.Printf("\n Commitaction obj : %+v", commitAction)
-    request := commitAction.Data.(Request)
-    fmt.Printf("\n Req obj : %+v", request)
-
-
- 
-    //if commitAction.Err == nil {                        
-        response = ch.FileSystem.ProcessMsg(&request.Req)      // process the request
-     /*else {
-        switch commitAction.Err.(type) {
-        case raftnode.Error_NotLeader:                       // Not a leader, redirect error
-            errorNotLeader := commitAction.Err.(rsm.Error_NotLeader)
-            response = &filesystem.Msg{
-                Kind            : 'R',
-                RedirectAddr    : ch.Raft.ServerList[ errorNotLeader.LeaderId ] }
-       
-        }
-    }
-
-   // chd.Raft.UpdateLastApplied(commitAction.Index)      // Update last applied
-
-    fmt.Println("Response  obj:", response)
-    // Reply only if the client has requested this server
-    if request.Id == ch.raftnode.ID() {
-        ch.SendToWaitCh(request.Id, response)      // Send response to corresponding serve thread
-    }
-    */
+  
 
     for {
 		select {
@@ -250,21 +211,22 @@ func (ch *HandleClient) handleCommit () {
 
 				reqObj := commit.Data.(Request)
 
-				//if commit.Err == nil {
+				if commit.Err == nil {
 					response = ch.FileSystem.ProcessMsg(&reqObj.Req)
-				/*} else {
+				} else {
 					id, _ := strconv.Atoi(commit.Err.Error())
 					//If no leader elected yet, try again with same raftnode
 					if id == -1 {
-						id = ch.rn.Id()
+						id = ch.raftnode.ID()
 					}
-					response = &filesystem.Msg{Kind:'R', RedirectURL:GetRedirectURLFromId(id)}
-				}*/
+
+					response = &filesystem.Msg{Kind:'R', RedirectURL:GetRedirectURL(id)}
+					fmt.Println("Redirecting  ",GetRedirectURL(id))
+				}
 
 				// Reply only if the client has requested this server
 				if reqObj.ServerId == ch.raftnode.ID() {
-					//waitCh := ch.(reqObj.Id)
-					//waitCh <- response
+				
 					ch.SendToWaitCh(reqObj.Id, response)
 				}
 			} else {
@@ -306,6 +268,16 @@ func (ch *HandleClient) DeregRequest(reqId int) {
     ch.MapLock.Unlock()
 }
 
+
+func GetRedirectURL(id int) string{
+	var redirectURL string
+	for i,cl := range configObjGlobal.Cluster{
+		if cl.Id == id {
+			redirectURL = cl.Host+":"+strconv.Itoa(configObjGlobal.Ports[i])
+		}
+	}
+	return redirectURL
+}
 
 /*func serverMain() {
 	tcpaddr, err := net.ResolveTCPAddr("tcp", "localhost:8080")

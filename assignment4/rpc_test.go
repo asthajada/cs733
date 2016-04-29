@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"strings"
 	"strconv"
+	"sync"
 	raftnode "github.com/asthajada/cs733/assignment4/raftnode"
 	filesystem "github.com/asthajada/cs733/assignment4/fs"
 )
@@ -92,9 +93,9 @@ func expect(t *testing.T, response *filesystem.Msg, expected *filesystem.Msg, er
 		t.Fatal("Expected " + errstr)
 	}
 }
-
+/*
 func TestRPC_BasicSequential(t *testing.T) {
-	cl := mkClient("localhost:9001")
+	cl := mkClient("localhost:9004")
 	fmt.Println("**********")
 	fmt.Println(cl)
 	defer cl.close()
@@ -143,10 +144,11 @@ func TestRPC_BasicSequential(t *testing.T) {
 	// Expect to not find the file
 	m, err = cl.read("cs733net")
 	expect(t, m, &filesystem.Msg{Kind: 'F'}, "file not found", err)
+
 }
 
-/*func TestRPC_Binary(t *testing.T) {
-	cl := mkClient(t)
+func TestRPC_Binary(t *testing.T) {
+	cl := mkClient("localhost:9004")
 	defer cl.close()
 
 	// Write binary contents
@@ -162,8 +164,13 @@ func TestRPC_BasicSequential(t *testing.T) {
 
 func TestRPC_Chunks(t *testing.T) {
 	// Should be able to accept a few bytes at a time
-	cl := mkClient(t)
+	cl := mkClient("localhost:9004")
 	defer cl.close()
+
+	data := "Cloud fun"
+	m1, err1 := cl.write("cs733net", data, 0)
+	expect(t, m1, &filesystem.Msg{Kind: 'O'}, "write success", err1)
+
 	var err error
 	snd := func(chunk string) {
 		if err == nil {
@@ -187,25 +194,33 @@ func TestRPC_Chunks(t *testing.T) {
 	expect(t, m, &filesystem.Msg{Kind: 'O'}, "writing in chunks should work", err)
 }
 
+
 func TestRPC_Batch(t *testing.T) {
 	// Send multiple commands in one batch, expect multiple responses
-	cl := mkClient(t)
+	cl := mkClient("localhost:9004")
 	defer cl.close()
+
+	data := "Cloud fun"
+	m, err:= cl.write("cs733net", data, 0)
+	expect(t, m, &filesystem.Msg{Kind: 'O'}, "write success", err)
+
 	cmds := "write batch1 3\r\nabc\r\n" +
 		"write batch2 4\r\ndefg\r\n" +
 		"read batch1\r\n"
 
+
+
 	cl.send(cmds)
-	m, err := cl.rcv()
+	m, err = cl.rcv()
 	expect(t, m, &filesystem.Msg{Kind: 'O'}, "write batch1 success", err)
 	m, err = cl.rcv()
 	expect(t, m, &filesystem.Msg{Kind: 'O'}, "write batch2 success", err)
 	m, err = cl.rcv()
 	expect(t, m, &filesystem.Msg{Kind: 'C', Contents: []byte("abc")}, "read batch1", err)
-}
+}*/
 
 func TestRPC_BasicTimer(t *testing.T) {
-	cl := mkClient(t)
+	cl := mkClient("localhost:9004")
 	defer cl.close()
 
 	// Write file cs733, with expiry time of 2 seconds
@@ -265,11 +280,11 @@ func TestRPC_BasicTimer(t *testing.T) {
 // any one clients' last write
 
 func TestRPC_ConcurrentWrites(t *testing.T) {
-	nclients := 500
+	nclients := 2
 	niters := 10
 	clients := make([]*Client, nclients)
 	for i := 0; i < nclients; i++ {
-		cl := mkClient(t)
+		cl := mkClient("localhost:9004")
 		if cl == nil {
 			t.Fatalf("Unable to create client #%d", i)
 		}
@@ -317,7 +332,7 @@ func TestRPC_ConcurrentWrites(t *testing.T) {
 		t.Fatalf("Expected to be able to read after 1000 writes. Got msg = %v", m)
 	}
 }
-
+/*
 // nclients cas to the same file. At the end the file should be any one clients' last write.
 // The only difference between this test and the ConcurrentWrite test above is that each
 // client loops around until each CAS succeeds. The number of concurrent clients has been
@@ -328,7 +343,7 @@ func TestRPC_ConcurrentCas(t *testing.T) {
 
 	clients := make([]*Client, nclients)
 	for i := 0; i < nclients; i++ {
-		cl := mkClient(t)
+		cl := mkClient("localhost:9004")
 		if cl == nil {
 			t.Fatalf("Unable to create client #%d", i)
 		}
@@ -385,8 +400,8 @@ func TestRPC_ConcurrentCas(t *testing.T) {
 	if !(m.Kind == 'C' && strings.HasSuffix(string(m.Contents), " 9")) {
 		t.Fatalf("Expected to be able to read after 1000 writes. Got msg.Kind = %d, msg.Contents=%s", m.Kind, m.Contents)
 	}
-}
-*/
+}*/
+
 //----------------------------------------------------------------------
 // Utility functions
 
@@ -481,7 +496,24 @@ func (cl *Client) sendRcv(str string) (msg *filesystem.Msg, err error) {
 	if err == nil {
 		msg, err = cl.rcv()
 	}
+
+	if msg != nil && msg.Kind == 'R' {
+
+		NewConnection(cl, msg.RedirectURL)
+		msg, err = cl.sendRcv(str)
+	} else if msg != nil && msg.Kind == 'I' {
+		msg, err = cl.sendRcv(str)
+	}
+
 	return msg, err
+}
+
+//Closes the current client connection and assigns to new serverURL
+func NewConnection (cl *Client, serverURL string) {
+	cl.close()
+	newClient := mkClient(serverURL)
+	cl.conn = newClient.conn
+	cl.reader = newClient.reader
 }
 
 func (cl *Client) close() {
@@ -561,6 +593,10 @@ func parseFirst(line string) (msg *filesystem.Msg, err error) {
 		msg.Kind = 'M'
 	case "ERR_INTERNAL":
 		msg.Kind = 'I'
+	case "ERR_REDIRECT":
+		msg.Kind = 'R'
+		msg.RedirectURL = fields[1]
+
 	default:
 		err = errors.New("Unknown response " + fields[0])
 	}

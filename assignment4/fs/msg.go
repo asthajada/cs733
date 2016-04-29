@@ -50,6 +50,7 @@ type Msg struct {
 	Numbytes int
 	Exptime  int // expiry time in seconds
 	Version  int
+	RedirectURL string
 }
 
 func GetMsg(reader *bufio.Reader) (msg *Msg, msgerr error, fatalerr error) {
@@ -154,6 +155,9 @@ func parseFirst(reader *bufio.Reader, buf []byte) (msg *Msg, msgerr error, fatal
 		response = true
 	case "ERR_INTERNAL":
 		kind = 'I'
+		response = true
+	case "ERR_REDIRECT":
+		kind = 'R'
 		response = true
 	default:
 		fatalerr = fmt.Errorf("Command %s not recognized", fields[0])
