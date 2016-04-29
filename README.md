@@ -7,7 +7,7 @@ Raft is a consensus algorithm like Paxos that is easy to understand. This packag
 go build
 ./assignment4 < server-id >
 
-####Code Structure
+###Code Structure
 
 ####Client Handler
 
