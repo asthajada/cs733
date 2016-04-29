@@ -24,8 +24,8 @@ type HandleClient struct {
 	Port      int
 	RequestMap map[int]chan filesystem.Msg
 	FileSystem *filesystem.FS
-	Counter int //Request Counter
-	Address string //HostAddress
+	Counter int 		//Request Counter
+	Address string 		//HostAddress
 	ExitWaitGr *sync.WaitGroup
 	MapLock *sync.RWMutex
 
@@ -42,7 +42,6 @@ func NewClient(index int,config raftnode.Config) (ch *HandleClient){
 	Register()
 
 	ch = &HandleClient{
-		//raftnode : raftnode.New(config.Cluster[index].Id,config),
 		raftnode : raftnode.New(config),
 		Port: config.Ports[index],
 		RequestMap: make( map[int]chan filesystem.Msg),
@@ -51,15 +50,11 @@ func NewClient(index int,config raftnode.Config) (ch *HandleClient){
 		Address: config.Cluster[index].Host,
 		MapLock: &sync.RWMutex{},
 		ExitWaitGr : &sync.WaitGroup{},
-
-
 	}
 
 	configObjGlobal = &config
 
 	return ch
-
-
 }
 
 func (ch *HandleClient) run(){
@@ -67,8 +62,6 @@ func (ch *HandleClient) run(){
 	ch.ExitWaitGr.Add(2)
 
 	ch.raftnode.StartRaftNodes()
-
-//	go ch.ListenActions()
 
 	address,_ := net.ResolveTCPAddr("tcp",ch.Address + ":" +strconv.Itoa(ch.Port))
 
@@ -82,9 +75,8 @@ func (ch *HandleClient) run(){
                 tcp_conn, _ := accept.AcceptTCP()
                 
                 ch.ExitWaitGr.Add(1)     
-                go ch.serve(tcp_conn)    // Start serve thread
+                go ch.serve(tcp_conn)    
             }
-        
         
         ch.ExitWaitGr.Done()
         
@@ -221,7 +213,7 @@ func (ch *HandleClient) handleCommit () {
 					}
 
 					response = &filesystem.Msg{Kind:'R', RedirectURL:GetRedirectURL(id)}
-					fmt.Println("Redirecting  ",GetRedirectURL(id))
+					
 				}
 
 				// Reply only if the client has requested this server
@@ -279,22 +271,6 @@ func GetRedirectURL(id int) string{
 	return redirectURL
 }
 
-/*func serverMain() {
-	tcpaddr, err := net.ResolveTCPAddr("tcp", "localhost:8080")
-	check(err)
-	tcp_acceptor, err := net.ListenTCP("tcp", tcpaddr)
-	check(err)
-
-	for {
-		tcp_conn, err := tcp_acceptor.AcceptTCP()
-		check(err)
-		go serve(tcp_conn)
-	}
-}
-
-func main() {
-	serverMain()
-}*/
 
 func Register() {
 	gob.Register(Request{})

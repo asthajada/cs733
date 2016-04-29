@@ -23,15 +23,6 @@ var clientHandler []*HandleClient
 func TestInitialSetup(t *testing.T) {
 
 
-	/*config,err := ReadConfigFile(CONFIG_FILE_NAME)
-	if err!= nil {
-		t.Fatal("Error in reading config file", CONFIG_FILE_NAME)
-	}
-	mcluster,_ := m(config)
-
-	fmt.Printf("Config file read :", config)
-	*/
-
 	myNetConfig := make([]raftnode.NetConfig,0)
 	myNetConfig=append(myNetConfig,raftnode.NetConfig{Id:1,Host:"localhost" ,Port:2000} )
 	myNetConfig=append(myNetConfig,raftnode.NetConfig{Id:2,Host:"localhost" ,Port:3000} )
@@ -46,28 +37,16 @@ func TestInitialSetup(t *testing.T) {
 	myclientports=append(myclientports,9004)	
 	myclientports=append(myclientports,9005)
 
-//	mynodes:=make([]raftnode.RaftNode,raftnode.NoOfServers)
-
-	
-
-
-
 	for i:=0; i<len(myclientports); i++  {
 		myConfig:=raftnode.Config{Cluster:myNetConfig,Id:i+1,InboxSize:100,OutboxSize:100,ElectionTimeout:1000,HeartbeatTimeout:200,LogDir:"logdirectory",Ports:myclientports}
-		fmt.Println("Running on  port : ", myConfig.Ports[i])
+		
 		clientHandler = append(clientHandler, NewClient(i ,myConfig))
 		clientHandler[i].run()
 	}
-	//config.MCluster = mcluster
-
-
+	
 	time.Sleep(3* time.Second)
 	
 }
-
-
-
-
 
 
 func expect(t *testing.T, response *filesystem.Msg, expected *filesystem.Msg, errstr string, err error) {
@@ -93,11 +72,9 @@ func expect(t *testing.T, response *filesystem.Msg, expected *filesystem.Msg, er
 		t.Fatal("Expected " + errstr)
 	}
 }
-/*
+
 func TestRPC_BasicSequential(t *testing.T) {
 	cl := mkClient("localhost:9004")
-	fmt.Println("**********")
-	fmt.Println(cl)
 	defer cl.close()
 
 	// Read non-existent file cs733net
@@ -217,7 +194,7 @@ func TestRPC_Batch(t *testing.T) {
 	expect(t, m, &filesystem.Msg{Kind: 'O'}, "write batch2 success", err)
 	m, err = cl.rcv()
 	expect(t, m, &filesystem.Msg{Kind: 'C', Contents: []byte("abc")}, "read batch1", err)
-}*/
+}
 
 func TestRPC_BasicTimer(t *testing.T) {
 	cl := mkClient("localhost:9004")
@@ -332,13 +309,13 @@ func TestRPC_ConcurrentWrites(t *testing.T) {
 		t.Fatalf("Expected to be able to read after 1000 writes. Got msg = %v", m)
 	}
 }
-/*
+
 // nclients cas to the same file. At the end the file should be any one clients' last write.
 // The only difference between this test and the ConcurrentWrite test above is that each
 // client loops around until each CAS succeeds. The number of concurrent clients has been
 // reduced to keep the testing time within limits.
-func TestRPC_ConcurrentCas(t *testing.T) {
-	nclients := 100
+/*func TestRPC_ConcurrentCas(t *testing.T) {
+	nclients := 2
 	niters := 10
 
 	clients := make([]*Client, nclients)
@@ -457,13 +434,13 @@ type Client struct {
 }
 
 func mkClient(port string) *Client {
-	fmt.Println("&&&&&&&&",port)
+	
 	var client *Client
 	raddr, err := net.ResolveTCPAddr("tcp", port)
-	fmt.Println("raddr",raddr)
+	
 	if err == nil {
 		conn, err := net.DialTCP("tcp", nil, raddr)
-		fmt.Println("conn",conn)
+	
 		if err == nil {
 			client = &Client{conn: conn, reader: bufio.NewReader(conn)}
 		}
@@ -471,7 +448,7 @@ func mkClient(port string) *Client {
 	if err != nil {
 		fmt.Errorf(err.Error())
 	}
-	fmt.Println("!!!!!!",client)
+	
 	return client
 }
 

@@ -2,7 +2,7 @@ package raftnode
 
 import (
 	"errors"
-	"fmt"
+	
 	"sort"
 	"strconv"
 	"time"
@@ -31,7 +31,6 @@ type Log struct {
 
 const noOfServers int = 5
 
-//type Event interface{}
 
 const serverID int = 123
 
@@ -98,7 +97,7 @@ type StateStore struct {
 	VotedFor int
 }
 
-//if equal then check votedfor== candidate iD then grant
+
 
 func onVoteRequest(obj VoteRequest, s *RaftStateMachine) []Action {
 
@@ -396,23 +395,7 @@ func onAppendEntriesRequest(obj AppendEntriesRequest, s *RaftStateMachine) []Act
 	if s.State == "follower" {
 
 		action = append(action, Alarm{Time: time.Duration(s.ElectionTimeout)*time.Millisecond})
-		/*if len(obj.Log) == 0 {
-
-			fmt.Println("processing heartbeat  ", s.MyID)
-
-			s.LeaderID = obj.LeaderID
-
-			/*if obj.LeaderCommit > s.CommitIndex {
-
-				s.CommitIndex = minimum(obj.LeaderCommit, obj.PrevLogIndex+1)
-
-			//	action = append(action, Commit{Index: s.CommitIndex, Data: s.Log[s.CommitIndex].Data})
-			}
-
-			action = append(action, Alarm{Time: time.Duration(s.ElectionTimeout)*time.Millisecond})
-			return action
-		}
-*/
+		
 		if s.Term > obj.Term {
 
 			action = append(action, Send{To: obj.LeaderID, Event: AppendEntriesResponse{Term: s.Term, Success: false, From: s.MyID}})
@@ -427,8 +410,6 @@ func onAppendEntriesRequest(obj AppendEntriesRequest, s *RaftStateMachine) []Act
 				action = append(action, Send{To: obj.LeaderID, Event: AppendEntriesResponse{Term: s.Term, Success: false, From: s.MyID}})
 
 			} else {
-
-				fmt.Println("object ",obj)
 
 				if obj.PrevLogIndex != -1 && len(s.Log) != 0 && s.Log[len(s.Log)-1].Term != obj.PrevLogTerm {
 
@@ -446,15 +427,8 @@ func onAppendEntriesRequest(obj AppendEntriesRequest, s *RaftStateMachine) []Act
 						s.Log = s.Log[:Index]
 						s.Log = append(s.Log, obj.Log...)
 
-						fmt.Println("leader's log length", len(obj.Log))
-
 						action = append(action, LogStore{Index: Index, Data: obj.Log[0].Data})
 
-						fmt.Println("***************")
-						fmt.Println("index")
-						fmt.Println(Index)
-						fmt.Println("length of log")
-						fmt.Println(len(s.Log))
 
 					}
 
@@ -473,10 +447,6 @@ func onAppendEntriesRequest(obj AppendEntriesRequest, s *RaftStateMachine) []Act
 						action = append(action, StateStore{Term: s.Term, VotedFor: s.VotedFor})
 					}
 
-
-					fmt.Println("this")
-					fmt.Println("obj.LeaderCommit :",obj.LeaderCommit)
-					fmt.Println("s.commitindex:",s.CommitIndex)
 
 					lastCommitIndex:=minimum(s.CommitIndex , obj.PrevLogIndex+len(obj.Log))
 					newlastCommitIndex:=minimum(obj.LeaderCommit , len(s.Log)-1)
@@ -748,8 +718,6 @@ func onAppendEntriesResponse(obj AppendEntriesResponse, s *RaftStateMachine) []A
 
 				//updating MatchIndex
 
-				fmt.Println("obj.LastLogIndex:",obj.LastLogIndex)
-				fmt.Println("obj.From:",obj.From)
 				if (obj.LastLogIndex+obj.Count)+1 > s.MatchIndex[obj.From-1] {
 					s.MatchIndex[obj.From-1] = obj.LastLogIndex + obj.Count
 
@@ -767,8 +735,7 @@ func onAppendEntriesResponse(obj AppendEntriesResponse, s *RaftStateMachine) []A
 				//the entry is commited only if it is present on majority and for the same Term
 				if newCommit > s.CommitIndex && s.Log[newCommit].Term == s.Term {
 					s.CommitIndex = newCommit
-					//astha
-
+				
 					action = append(action, Commit{Index: s.CommitIndex, Data: s.Log[newCommit].Data})
 
 				}
@@ -784,7 +751,6 @@ func onAppendEntriesResponse(obj AppendEntriesResponse, s *RaftStateMachine) []A
 
 func onTimeout(obj Timeout, s *RaftStateMachine) []Action {
 
-	fmt.Printf("Inside from onTimeout \n")
 	action := make([]Action, 0)
 
 	if s.State == "follower" || s.State == "candidate" {
@@ -853,25 +819,6 @@ func onAppend(obj Append, s *RaftStateMachine) []Action {
 		action = append(action, Commit{Data: obj.Data, Err: errors.New(strconv.Itoa(s.LeaderID))}) //as follower or candidate cannot append To Log send LeaderID To the client
 
 	} else {
-
-/*		fmt.Println("inside append of leader")
-
-		length := len(s.Log)
-
-		newLog := make([]Log, 0)
-
-		s.Log = append(s.Log, Log{s.Term, obj.Data})
-		newLog = append(newLog, Log{s.Term, obj.Data})
-
-		action = append(action, LogStore{Index: length, Data: s.Log[length].Data})
-
-		//send empty append entries request
-		for i := 0; i < len(s.PeerID); i++ {
-
-			action = append(action, Send{To: s.PeerID[i], Event: AppendEntriesRequest{Log: newLog, Term: s.Term, PrevLogIndex: len(s.Log) - 2, PrevLogTerm: s.Log[len(s.Log)-2].Term, LeaderID: s.LeaderID}})
-
-		}
-		*/
 		
 		length := len(s.Log)
 		newLog := make([]Log, 0)
@@ -887,9 +834,7 @@ func onAppend(obj Append, s *RaftStateMachine) []Action {
 			s.NextIndex[i] = len(s.Log)
 			s.MatchIndex[i] = 0
 		}
-	/*	logEntry := make([]LogEntry, 0)
-		logEntry = append(logEntry, LogEntry{Term: s.CurrentTerm, Data: msg.Data})
-*/
+	
 		newLog = append(newLog, Log{s.Term, obj.Data})
 
 		action = append(action, LogStore{Index: len(s.Log), Data: s.Log[length].Data})
@@ -899,7 +844,6 @@ func onAppend(obj Append, s *RaftStateMachine) []Action {
 			if s.MyID != s.PeerID[i] {
 				action = append(action, Send{To: s.PeerID[i], Event: AppendEntriesRequest{Log:newLog,Term: s.Term, PrevLogIndex: len(s.Log) - 2, PrevLogTerm: s.Log[len(s.Log)-2].Term, LeaderID: s.LeaderID,LeaderCommit: s.CommitIndex}})
 
-				//action = append(action, Send{from: s.PeerID[i], event: AppendEntriesReq{Term: s.Term, LeaderId: s.LeaderId, LastLogIndex: len(s.Log)-1, LastLogTerm: s.GetLogEntryAtIndex(s.GetLogLength() - 2).Term, LogEntries: logEntry, LeaderCommitIndex: s.CommitIndex}})
 			}
 		}
 

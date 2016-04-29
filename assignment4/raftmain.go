@@ -1,7 +1,7 @@
 package main
 
 import (
-	//"fmt"
+	
 	raftnode "github.com/asthajada/cs733/assignment4/raftnode"
 	"os"
 	"strconv"
@@ -11,17 +11,6 @@ import (
 )
 
 func main() {
-
-	/*expectArgs := func (n int) {
-		if len(os.Args) < n {
-			fmt.Println("\nCommandline Arg error ! \n Usage : ./assignment4 <id>\n")
-			os.Exit(1)
-		}
-	}
-
-	expectArgs(1)*/
-
-	
 
 	myNetConfig := make([]raftnode.NetConfig,0)
 	myNetConfig=append(myNetConfig,raftnode.NetConfig{Id:1,Host:"localhost" ,Port:2000} )
@@ -38,10 +27,8 @@ func main() {
 	myclientports=append(myclientports,9005)
 
 
-		myConfig:=raftnode.Config{Cluster:myNetConfig,Id:1,InboxSize:100,OutboxSize:100,ElectionTimeout:1000,HeartbeatTimeout:200,LogDir:"logdirectory",Ports:myclientports}
-	//config.MCluster = mcluster
-
-
+	myConfig:=raftnode.Config{Cluster:myNetConfig,Id:1,InboxSize:100,OutboxSize:100,ElectionTimeout:1000,HeartbeatTimeout:200,LogDir:"logdirectory",Ports:myclientports}
+	
 	time.Sleep(3* time.Second)
 
 

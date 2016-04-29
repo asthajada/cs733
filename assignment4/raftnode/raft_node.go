@@ -9,12 +9,10 @@ import(
 	"encoding/json"
 	"strconv"
 	"fmt"
-	"reflect"
 	"io/ioutil"
 	"sync"
 
 	cluster "github.com/cs733-iitb/cluster"
-//	mockcluster "github.com/cs733-iitb/cluster/mock"
 	log "github.com/cs733-iitb/log"
 )
 
@@ -83,11 +81,9 @@ type Time interface{
 type RaftNode struct { // implements Node interface
 	server RaftStateMachine
     eventCh chan Event
-    //timeoutCh chan Time
     shutdownCh chan Event
     serverOfCluster cluster.Server
     timer *time.Timer
-    //heartbeattimer *time.Ticker
     commitCh chan *Commit
     log *log.Log
     LogDir string
@@ -170,10 +166,8 @@ func (rn *RaftNode) ProcessEvents() {
 				rn.doActions(actions)
 
 
-			//reading from timeoutCh
 			case ev = <- rn.timer.C:
 
-				fmt.Println("Timeout event received")
 				actions := rn.server.ProcessEvent(Timeout{})
 
 				rn.doActions(actions)
@@ -181,38 +175,20 @@ func (rn *RaftNode) ProcessEvents() {
 			case ev := <- rn.serverOfCluster.Inbox():
 
 				actions := rn.server.ProcessEvent(ev.Msg)
-				fmt.Println("*****************")
-				fmt.Println(rn.server.MyID)
+			
 
 
 				rn.doActions(actions)
-
-/*
-			case <- rn.heartbeattimer.C:
-
-				//send empty AppendEntriesRequest when heartbeat timer expires
-				if rn.server.State=="leader" {
-
-						rn.timeoutCh <- Timeout{}
-
-				}*/
 
 			case _, err := <- rn.shutdownCh:
 				if !err {
 
 
-
-					//rn.heartbeattimer.Stop()
 					rn.timer.Stop()
-//					ev := <-rn.commitCh
-
-//					fmt.Println(ev)
 					close(rn.commitCh)
 
 					rn.server.State="follower"
 
-
-					//close(rn.timeoutCh)
 
 					close(rn.eventCh)
 					rn.serverOfCluster.Close()
@@ -239,20 +215,13 @@ func (rn *RaftNode) doActions(actions []Action) {
 	switch action.(type) {
 
 			case Send:
-				/*//resetting the timer
-				fmt.Println("-------------resetting the timer")
-				rn.timer.Stop()
-				rn.timer = time.AfterFunc(time.Duration(1000+rand.Intn(400))*time.Millisecond, func() { rn.timeoutCh <- Timeout{} })
-*/
+			
 				actionname := action.(Send)
-				fmt.Printf("sendAction received:%s.action%+v ",reflect.TypeOf(actionname.Event).Name(),actionname.Event)
-				fmt.Println("")
+				
 				rn.serverOfCluster.Outbox() <- &cluster.Envelope{Pid:actionname.To, Msg:actionname.Event}
 			case Alarm:
 				//resetting the timer
-				fmt.Println("in alarm action")
 				rn.timer.Stop()
-				//rn.timer = time.AfterFunc(time.Duration(1000+rand.Intn(400))*time.Millisecond, func() { rn.timeoutCh <- Timeout{} })
 				alarmAction := action.(Alarm)
 				rn.timer.Reset(alarmAction.Time)
 
@@ -262,17 +231,11 @@ func (rn *RaftNode) doActions(actions []Action) {
 
 				//output commit obtained from statemachine into the Commit Channel
 				newaction:=action.(Commit)
-				fmt.Printf("\n Node : %d | Commit Obj : %+v", rn.ID(), newaction)
+				
 				rn.CommitChannel() <- &newaction
 
 
 			case LogStore:
-
-				//creating persistent log files
-
-				//lg, _ := log.Open(rn.LogDir+ string(rn.server.MyID))
-
-				fmt.Println("inside logstore")
 
 				logstore:=action.(LogStore)
 
@@ -283,7 +246,6 @@ func (rn *RaftNode) doActions(actions []Action) {
 
 				//creating files for persistent storage of State
 
-				fmt.Println("inside statestore")
 
 				statestore:=action.(StateStore)
 
@@ -308,47 +270,7 @@ func (rn *RaftNode) doActions(actions []Action) {
 
 }
 
-/*func createMockCluster(config Config)(*mockcluster.MockCluster,error ) {
 
-	clconfig := cluster.Config{Peers:[]cluster.PeerConfig{
-		{Id:1}, {Id:2}, {Id:3},{Id:4},{Id:5},
-	}}
-	cluster, err := mockcluster.NewCluster(clconfig)
-	if err != nil {return cluster, err}
-
-	return cluster,nil
-
-}*/
-
-
-/*func makeRafts() []RaftNode {
-
-	myNetConfig := make([]NetConfig,0)
-	myNetConfig=append(myNetConfig,NetConfig{Id:1,Host:"localhost" ,Port:2000} )
-	myNetConfig=append(myNetConfig,NetConfig{Id:2,Host:"localhost" ,Port:3000} )
-	myNetConfig=append(myNetConfig,NetConfig{Id:3,Host:"localhost" ,Port:4000} )
-	myNetConfig=append(myNetConfig,NetConfig{Id:4,Host:"localhost" ,Port:5000} )
-	myNetConfig=append(myNetConfig,NetConfig{Id:5,Host:"localhost" ,Port:6000} )
-
-
-	mynodes:=make([]RaftNode,noOfServers)
-
-	for i := 0; i < noOfServers; i++ {
-		fmt.Println(i)
-		myConfig:=Config{cluster:myNetConfig,Id:myNetConfig[i].Id,InboxSize:100,OutboxSize:100,ElectionTimeout:1000,HeartbeatTimeout:200,LogDir:"logdirectory"}
-		mynodes[i]=New(myConfig)
-		go mynodes[i].ProcessEvents()
-	}
-
-	time.Sleep(5*time.Millisecond)
-
-	Register()
-
-	return mynodes
-
-
-}
-*/
 func New (config Config) *RaftNode {
 
 	Register()
@@ -357,18 +279,12 @@ func New (config Config) *RaftNode {
 
 	directories:=config.LogDir + strconv.Itoa(config.Id)
 
-	fmt.Println("directory created is : ",directories)
-
-
 	lg, _ := log.Open(directories)
 
 	lastindex := lg.GetLastIndex()
 
-	fmt.Println("the last indexz is",lastindex)
 	intlastindex:= int(lastindex)
 
-
-	//fmt.Println(config)
 
 	mypeers:=make([]int,noOfServers)
 	myLog := make([]Log,0)
@@ -377,7 +293,6 @@ func New (config Config) *RaftNode {
 	mymatchIndex:=make([]int,noOfServers)
 	myVoteReceived:=make([]int,noOfServers)
 
-	fmt.Println("-------------")
 
 	statestore:="statestore"+strconv.Itoa(config.Id)
 
@@ -386,13 +301,11 @@ func New (config Config) *RaftNode {
         fmt.Printf("File error: %v\n", e)
         os.Exit(1)
     }
-    fmt.Printf("%s\n", string(file))
+ 
 
     var jsontype JsonStateStore
     json.Unmarshal(file, &jsontype)
-    fmt.Printf("Term: %v\n", jsontype.Term)
-	fmt.Printf("VotedFor: %v\n", jsontype.VotedFor)
-
+  
 	var wait sync.WaitGroup
 	raft.wg=&wait
 
@@ -405,7 +318,7 @@ func New (config Config) *RaftNode {
 
 
     for i := 0; i < len(config.Cluster); i++ {
-    //	fmt.Println(i)
+  
     	configCluster.Peers=append(configCluster.Peers,cluster.PeerConfig{Id:config.Cluster[i].Id,Address:fmt.Sprint(config.Cluster[i].Host,":",config.Cluster[i].Port)})
     	mypeers[i]=config.Cluster[i].Id
 
@@ -429,35 +342,23 @@ func New (config Config) *RaftNode {
 	raft.server=s
 
 	for i := 0; i <=intlastindex ; i++ {
-		fmt.Println("checking lgget")
-
+		
 		newLog,_:=lg.Get(int64(i))
-
-		//newLog1:=newLog.(Request)
-		fmt.Println(newLog)
-		//newLog1:=newLog.(Log)
-
-		//raft.server.Log[i].Term=newLog1.Term
-		//\raft.server.Log[i].Data=newLog1.Data
 
 		raft.server.Log=append(raft.server.Log,Log{Term:0,Data:newLog})
 
-		fmt.Println("@@",raft.server.Log)
 
 
 
 	}
 
-	fmt.Println("^^^^^^^^^^^^^^",raft.server.Log)
 
 
 
 	eventChannel:=make(chan Event,1000)
-	//timeoutChannel:=make(chan Time,1000)
 	commitChannel := make(chan *Commit,1000)
 	shutdownChannel:=make(chan Event,1000)
 	raft.eventCh=eventChannel
-	//raft.timeoutCh=timeoutChannel
 	raft.commitCh = commitChannel
 
 	raft.shutdownCh= shutdownChannel
@@ -468,13 +369,6 @@ func New (config Config) *RaftNode {
 
   	raft.LogDir=config.LogDir
 
-
-	rand.Seed(time.Now().UnixNano())
-	//raft.timer = time.AfterFunc(time.Duration(config.ElectionTimeout+rand.Intn(config.ElectionTimeout))*time.Millisecond, func() { raft.timeoutCh <- Timeout{} })
-
-  	//raft.heartbeattimer=time.AfterFunc(time.Duration(config.HeartbeatTimeout+rand.Intn(100))*time.Millisecond, func (){raft.timeoutCh <- Timeout{}} )
- 	rand.Seed(time.Now().UnixNano())
-  	//raft.heartbeattimer = time.NewTicker(time.Duration(config.HeartbeatTimeout+ rand.Intn(config.ElectionTimeout)) * time.Millisecond)
 
   	return &raft;
 
