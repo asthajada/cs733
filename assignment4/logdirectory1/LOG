@@ -1,0 +1,42 @@
+=============== Apr 29, 2016 (IST) ===============
+02:08:39.902881 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+02:08:39.903578 db@open opening
+02:08:39.904266 version@stat F·[] S·0B[] Sc·[]
+02:08:39.905025 db@janitor F·2 G·0
+02:08:39.905074 db@open done T·1.467251ms
+=============== Apr 29, 2016 (IST) ===============
+02:09:48.126404 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+02:09:48.126840 version@stat F·[] S·0B[] Sc·[]
+02:09:48.126866 db@open opening
+02:09:48.126945 journal@recovery F·1
+02:09:48.127203 journal@recovery recovering @1
+02:09:48.128319 version@stat F·[] S·0B[] Sc·[]
+02:09:48.128935 db@janitor F·2 G·0
+02:09:48.128989 db@open done T·2.104826ms
+=============== Apr 29, 2016 (IST) ===============
+02:12:35.483849 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+02:12:35.484359 version@stat F·[] S·0B[] Sc·[]
+02:12:35.484394 db@open opening
+02:12:35.484503 journal@recovery F·1
+02:12:35.484852 journal@recovery recovering @2
+02:12:35.486205 version@stat F·[] S·0B[] Sc·[]
+02:12:35.487033 db@janitor F·2 G·0
+02:12:35.487074 db@open done T·2.65809ms
+=============== Apr 29, 2016 (IST) ===============
+02:14:59.484293 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+02:14:59.484723 version@stat F·[] S·0B[] Sc·[]
+02:14:59.484750 db@open opening
+02:14:59.484823 journal@recovery F·1
+02:14:59.485121 journal@recovery recovering @4
+02:14:59.485955 version@stat F·[] S·0B[] Sc·[]
+02:14:59.486536 db@janitor F·2 G·0
+02:14:59.486574 db@open done T·1.806376ms
+=============== Apr 29, 2016 (IST) ===============
+09:27:30.433911 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+09:27:30.471172 version@stat F·[] S·0B[] Sc·[]
+09:27:30.471235 db@open opening
+09:27:30.471407 journal@recovery F·1
+09:27:30.471747 journal@recovery recovering @6
+09:27:30.472659 version@stat F·[] S·0B[] Sc·[]
+09:27:30.473266 db@janitor F·2 G·0
+09:27:30.473302 db@open done T·2.041297ms

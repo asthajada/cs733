@@ -1,4 +1,4 @@
-package main  
+package raftnode  
 
 import (
 	"strconv"
@@ -30,7 +30,7 @@ type Log struct{
 	Data []byte
 }
 
-const noOfServers int=5
+const NoOfServers int=5
 
 //type Event interface{}
 

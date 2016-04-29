@@ -1,4 +1,4 @@
-package main 
+package raftnode 
 
 import(
 	
@@ -14,18 +14,19 @@ import(
 	"sync"
 
 	cluster "github.com/cs733-iitb/cluster"
-	mockcluster "github.com/cs733-iitb/cluster/mock"
+//	mockcluster "github.com/cs733-iitb/cluster/mock"
 	log "github.com/cs733-iitb/log"
 )
 
 type Config struct {
-	cluster []NetConfig 
+	Cluster []NetConfig 
 	Id int
 	LogDir string
 	ElectionTimeout int
 	HeartbeatTimeout int
 	InboxSize  int
 	OutboxSize int
+	Ports []int
 	
 }
 
@@ -117,6 +118,10 @@ func (rn *RaftNode) CommittedIndex() int {
 	
 }
 
+func (rn *RaftNode) StartRaftNodes(){
+	go rn.ProcessEvents()
+}
+
 func (rn *RaftNode) Append(data []byte) {
 	rn.eventCh <- Append{Data: data}
 }
@@ -127,6 +132,8 @@ func (rn *RaftNode) CommitChannel() chan *Commit {
 
 
 }
+
+
 
 
 func getLeader(rn []RaftNode) RaftNode{
@@ -242,7 +249,7 @@ func (rn *RaftNode) doActions(actions []Action) {
 				rn.serverOfCluster.Outbox() <- &cluster.Envelope{Pid:actionname.To, Msg:actionname.Event}
 			case Alarm:
 				//resetting the timer
-
+				fmt.Println("in alarm action")
 				rn.timer.Stop()
 				rn.timer = time.AfterFunc(time.Duration(1000+rand.Intn(400))*time.Millisecond, func() { rn.timeoutCh <- Timeout{} })
 
@@ -296,7 +303,7 @@ func (rn *RaftNode) doActions(actions []Action) {
 
 }
 
-func createMockCluster(config Config)(*mockcluster.MockCluster,error ) {
+/*func createMockCluster(config Config)(*mockcluster.MockCluster,error ) {
 	
 	clconfig := cluster.Config{Peers:[]cluster.PeerConfig{
 		{Id:1}, {Id:2}, {Id:3},{Id:4},{Id:5},
@@ -306,10 +313,10 @@ func createMockCluster(config Config)(*mockcluster.MockCluster,error ) {
 
 	return cluster,nil
 
-}
+}*/
 
 
-func makeRafts() []RaftNode {
+/*func makeRafts() []RaftNode {
 	
 	myNetConfig := make([]NetConfig,0)
 	myNetConfig=append(myNetConfig,NetConfig{Id:1,Host:"localhost" ,Port:2000} )
@@ -321,17 +328,12 @@ func makeRafts() []RaftNode {
 
 	mynodes:=make([]RaftNode,noOfServers)
 
-	myConfig:=Config{cluster:myNetConfig,Id:1,InboxSize:100,OutboxSize:100,ElectionTimeout:1000,HeartbeatTimeout:200,LogDir:"logdirectory"}
-	
-	mockcluster1,_:=createMockCluster(myConfig)
-
 	for i := 0; i < noOfServers; i++ {
-		mynodes[i]=New(myNetConfig[i].Id,myConfig)
-		mynodes[i].serverOfCluster=mockcluster1.Servers[mynodes[i].server.MyID]
+		fmt.Println(i)
+		myConfig:=Config{cluster:myNetConfig,Id:myNetConfig[i].Id,InboxSize:100,OutboxSize:100,ElectionTimeout:1000,HeartbeatTimeout:200,LogDir:"logdirectory"}
+		mynodes[i]=New(myConfig)
 		go mynodes[i].ProcessEvents()
 	}
-
-
 
 	time.Sleep(5*time.Millisecond)
 
@@ -341,25 +343,37 @@ func makeRafts() []RaftNode {
 
 
 }
+*/
+func New (config Config) *RaftNode {
 
-func New (id int,config Config) RaftNode {
+	var noOfServers int
+	noOfServers=5
 
 	var raft RaftNode
 
-	fmt.Println("inside new")
 
-	directories:=config.LogDir + strconv.Itoa(id)
-	fmt.Println(directories)
+	fmt.Println("------------")
+	fmt.Println(config.Id)
+	directories:=config.LogDir + strconv.Itoa(config.Id)
 
-	lg, _ := log.Open(directories)
+	fmt.Println("directory created is : ",directories)
+
+
+	lg, err := log.Open(directories)
+
+	if(err!=nil){
+		fmt.Println(err)
+
+	}
 
 	lastindex := lg.GetLastIndex()
+
+	fmt.Println("the last indexz is",lastindex)
 	intlastindex:= int(lastindex)
 
-	fmt.Println("*********")
-	fmt.Println(intlastindex)
-
 	
+	//fmt.Println(config)
+
 	mypeers:=make([]int,noOfServers)
 	myLog := make([]Log,0)
 	myLog=append(myLog,Log{0,[]byte("hello")})
@@ -369,7 +383,7 @@ func New (id int,config Config) RaftNode {
 
 	fmt.Println("-------------")
 
-	statestore:="statestore"+strconv.Itoa(id)
+	statestore:="statestore"+strconv.Itoa(config.Id)
 
 	file, e := ioutil.ReadFile("./"+statestore)
 	if e != nil {
@@ -387,18 +401,25 @@ func New (id int,config Config) RaftNode {
 	raft.wg=&wait
 
 
-    for i := 0; i < len(config.cluster); i++ {
-    	mypeers[i]=config.cluster[i].Id
-    	
+	configCluster := cluster.Config{
+        Peers: []cluster.PeerConfig{},
+        InboxSize: config.InboxSize,
+        OutboxSize: config.OutboxSize,
     }
 
 
+    for i := 0; i < len(config.Cluster); i++ {
+    //	fmt.Println(i)
+    	configCluster.Peers=append(configCluster.Peers,cluster.PeerConfig{Id:config.Cluster[i].Id,Address:fmt.Sprint(config.Cluster[i].Host,":",config.Cluster[i].Port)})
+    	mypeers[i]=config.Cluster[i].Id
+    	
+    }
   
     s:=RaftStateMachine{
 						Term:jsontype.Term,
 						VotedFor:jsontype.VotedFor ,
 						State: "follower", 
-						MyID:id,
+						MyID:config.Id,
 						PeerID:mypeers,
 						Log:myLog,
 						CommitIndex:0,
@@ -411,36 +432,54 @@ func New (id int,config Config) RaftNode {
 	raft.server=s
 
 	for i := 0; i <=intlastindex ; i++ {
+		fmt.Println("checking lgget")
+
 		newLog,_:=lg.Get(int64(i))
 
 		newLog1:=newLog.([]byte)
-		
+		fmt.Println(newLog1)
+		//newLog1:=newLog.(Log)
+
+		//raft.server.Log[i].Term=newLog1.Term
+		//\raft.server.Log[i].Data=newLog1.Data
+
 		raft.server.Log=append(raft.server.Log,Log{Term:0,Data:newLog1})
+
+		fmt.Println("@@",raft.server.Log)
+
+
 		
 	}
+
+	fmt.Println("^^^^^^^^^^^^^^",raft.server.Log)
+
 
 
 	eventChannel:=make(chan Event,1000)
 	timeoutChannel:=make(chan Time,1000)
 	commitChannel := make(chan *Commit,1000)
-	shutdownChannel:=make(chan Event,1000)
+	shutdownChannel:=make(chan Event,1000)	
 	raft.eventCh=eventChannel
 	raft.timeoutCh=timeoutChannel
 	raft.commitCh = commitChannel	
+
 	raft.shutdownCh= shutdownChannel
-  
+  	clusterServer,_:=cluster.New(config.Id,configCluster)
+  	raft.serverOfCluster=clusterServer
+
   	raft.log=lg
 
   	raft.LogDir=config.LogDir
 
  
 	rand.Seed(time.Now().UnixNano())
-	raft.timer = time.AfterFunc(time.Duration(config.ElectionTimeout+rand.Intn(100))*time.Millisecond, func() { raft.timeoutCh <- Timeout{} })
+	raft.timer = time.AfterFunc(time.Duration(config.ElectionTimeout+rand.Intn(config.ElectionTimeout))*time.Millisecond, func() { raft.timeoutCh <- Timeout{} })
  
+  	//raft.heartbeattimer=time.AfterFunc(time.Duration(config.HeartbeatTimeout+rand.Intn(100))*time.Millisecond, func (){raft.timeoutCh <- Timeout{}} )
  	rand.Seed(time.Now().UnixNano())
-  	raft.heartbeattimer = time.NewTicker(time.Duration(config.HeartbeatTimeout+ rand.Intn(100)) * time.Millisecond)
+  	raft.heartbeattimer = time.NewTicker(time.Duration(config.HeartbeatTimeout+ rand.Intn(config.ElectionTimeout)) * time.Millisecond)
 
-  	return raft;
+  	return &raft;
 	
 }
 
