@@ -2,20 +2,17 @@ package main
 
 
 import (
-	/*"bufio"
-	"bytes"
 	"errors"
-	"fmt"
 	"net"
-	"strconv"
-	"strings"
-	"sync"*/
+	"bufio"
 	"time"
 	"fmt"
 	"testing"
-	
+	"bytes"
+	"strings"
+	"strconv"
 	raftnode "github.com/asthajada/cs733/assignment4/raftnode"
-
+	filesystem "github.com/asthajada/cs733/assignment4/fs"
 )
 
 
@@ -57,36 +54,22 @@ func TestInitialSetup(t *testing.T) {
 	for i:=0; i<len(myclientports); i++  {
 		myConfig:=raftnode.Config{Cluster:myNetConfig,Id:i+1,InboxSize:100,OutboxSize:100,ElectionTimeout:1000,HeartbeatTimeout:200,LogDir:"logdirectory",Ports:myclientports}
 		fmt.Println("Running on  port : ", myConfig.Ports[i])
-		clientHandler = append(clientHandler, New(i ,myConfig))
+		clientHandler = append(clientHandler, NewClient(i ,myConfig))
 		clientHandler[i].run()
 	}
 	//config.MCluster = mcluster
 
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(3* time.Second)
 	
 }
 
-/*func New(i int,myConfig raftnode.Config) {
-
-	mockcluster1,_:=raftnode.CreateMockCluster(myConfig)
-
-	for i := 0; i < NoOfServers; i++ {
-		mynodes[i]=New(myNetConfig[i].Id,myConfig)
-		mynodes[i].serverOfCluster=mockcluster1.Servers[mynodes[i].server.MyID]
-		go mynodes[i].ProcessEvents()
-	}
-	
-}*/
 
 
 
-/*func TestRPCMain(t *testing.T) {
-	go serverMain()
-	time.Sleep(1 * time.Second)
-}
 
-func expect(t *testing.T, response *Msg, expected *Msg, errstr string, err error) {
+
+func expect(t *testing.T, response *filesystem.Msg, expected *filesystem.Msg, errstr string, err error) {
 	if err != nil {
 		t.Fatal("Unexpected error: " + err.Error())
 	}
@@ -111,66 +94,69 @@ func expect(t *testing.T, response *Msg, expected *Msg, errstr string, err error
 }
 
 func TestRPC_BasicSequential(t *testing.T) {
-	cl := mkClient(t)
+	cl := mkClient("localhost:9001")
+	fmt.Println("**********")
+	fmt.Println(cl)
 	defer cl.close()
 
 	// Read non-existent file cs733net
 	m, err := cl.read("cs733net")
-	expect(t, m, &Msg{Kind: 'F'}, "file not found", err)
+	expect(t, m, &filesystem.Msg{Kind: 'F'}, "file not found", err)
+
 
 	// Read non-existent file cs733net
 	m, err = cl.delete("cs733net")
-	expect(t, m, &Msg{Kind: 'F'}, "file not found", err)
+	expect(t, m, &filesystem.Msg{Kind: 'F'}, "file not found", err)
 
 	// Write file cs733net
 	data := "Cloud fun"
 	m, err = cl.write("cs733net", data, 0)
-	expect(t, m, &Msg{Kind: 'O'}, "write success", err)
+	expect(t, m, &filesystem.Msg{Kind: 'O'}, "write success", err)
 
 	// Expect to read it back
 	m, err = cl.read("cs733net")
-	expect(t, m, &Msg{Kind: 'C', Contents: []byte(data)}, "read my write", err)
+	expect(t, m, &filesystem.Msg{Kind: 'C', Contents: []byte(data)}, "read my write", err)
 
 	// CAS in new value
 	version1 := m.Version
 	data2 := "Cloud fun 2"
 	// Cas new value
 	m, err = cl.cas("cs733net", version1, data2, 0)
-	expect(t, m, &Msg{Kind: 'O'}, "cas success", err)
+	expect(t, m, &filesystem.Msg{Kind: 'O'}, "cas success", err)
 
 	// Expect to read it back
 	m, err = cl.read("cs733net")
-	expect(t, m, &Msg{Kind: 'C', Contents: []byte(data2)}, "read my cas", err)
+	expect(t, m, &filesystem.Msg{Kind: 'C', Contents: []byte(data2)}, "read my cas", err)
 
 	// Expect Cas to fail with old version
 	m, err = cl.cas("cs733net", version1, data, 0)
-	expect(t, m, &Msg{Kind: 'V'}, "cas version mismatch", err)
+	expect(t, m, &filesystem.Msg{Kind: 'V'}, "cas version mismatch", err)
 
 	// Expect a failed cas to not have succeeded. Read should return data2.
 	m, err = cl.read("cs733net")
-	expect(t, m, &Msg{Kind: 'C', Contents: []byte(data2)}, "failed cas to not have succeeded", err)
+	expect(t, m, &filesystem.Msg{Kind: 'C', Contents: []byte(data2)}, "failed cas to not have succeeded", err)
 
 	// delete
 	m, err = cl.delete("cs733net")
-	expect(t, m, &Msg{Kind: 'O'}, "delete success", err)
+	expect(t, m, &filesystem.Msg{Kind: 'O'}, "delete success", err)
 
 	// Expect to not find the file
 	m, err = cl.read("cs733net")
-	expect(t, m, &Msg{Kind: 'F'}, "file not found", err)
+	expect(t, m, &filesystem.Msg{Kind: 'F'}, "file not found", err)
 }
 
-func TestRPC_Binary(t *testing.T) {
+/*func TestRPC_Binary(t *testing.T) {
 	cl := mkClient(t)
 	defer cl.close()
 
 	// Write binary contents
 	data := "\x00\x01\r\n\x03" // some non-ascii, some crlf chars
 	m, err := cl.write("binfile", data, 0)
-	expect(t, m, &Msg{Kind: 'O'}, "write success", err)
+	expect(t, m, &filesystem.Msg{Kind: 'O'}, "write success", err)
 
 	// Expect to read it back
 	m, err = cl.read("binfile")
-	expect(t, m, &Msg{Kind: 'C', Contents: []byte(data)}, "read my write", err)
+	expect(t, m, &filesystem.Msg{Kind: 'C', Contents: []byte(data)}, "read my write", err)
 
 }
 
@@ -196,9 +182,9 @@ func TestRPC_Chunks(t *testing.T) {
 	snd("0\r\nabcdefghij\r")
 	time.Sleep(10 * time.Millisecond)
 	snd("\n")
-	var m *Msg
+	var m *filesystem.Msg
 	m, err = cl.rcv()
-	expect(t, m, &Msg{Kind: 'O'}, "writing in chunks should work", err)
+	expect(t, m, &filesystem.Msg{Kind: 'O'}, "writing in chunks should work", err)
 }
 
 func TestRPC_Batch(t *testing.T) {
@@ -211,11 +197,11 @@ func TestRPC_Batch(t *testing.T) {
 
 	cl.send(cmds)
 	m, err := cl.rcv()
-	expect(t, m, &Msg{Kind: 'O'}, "write batch1 success", err)
+	expect(t, m, &filesystem.Msg{Kind: 'O'}, "write batch1 success", err)
 	m, err = cl.rcv()
-	expect(t, m, &Msg{Kind: 'O'}, "write batch2 success", err)
+	expect(t, m, &filesystem.Msg{Kind: 'O'}, "write batch2 success", err)
 	m, err = cl.rcv()
-	expect(t, m, &Msg{Kind: 'C', Contents: []byte("abc")}, "read batch1", err)
+	expect(t, m, &filesystem.Msg{Kind: 'C', Contents: []byte("abc")}, "read batch1", err)
 }
 
 func TestRPC_BasicTimer(t *testing.T) {
@@ -225,52 +211,52 @@ func TestRPC_BasicTimer(t *testing.T) {
 	// Write file cs733, with expiry time of 2 seconds
 	str := "Cloud fun"
 	m, err := cl.write("cs733", str, 2)
-	expect(t, m, &Msg{Kind: 'O'}, "write success", err)
+	expect(t, m, &filesystem.Msg{Kind: 'O'}, "write success", err)
 
 	// Expect to read it back immediately.
 	m, err = cl.read("cs733")
-	expect(t, m, &Msg{Kind: 'C', Contents: []byte(str)}, "read my cas", err)
+	expect(t, m, &filesystem.Msg{Kind: 'C', Contents: []byte(str)}, "read my cas", err)
 
 	time.Sleep(3 * time.Second)
 
 	// Expect to not find the file after expiry
 	m, err = cl.read("cs733")
-	expect(t, m, &Msg{Kind: 'F'}, "file not found", err)
+	expect(t, m, &filesystem.Msg{Kind: 'F'}, "file not found", err)
 
 	// Recreate the file with expiry time of 1 second
 	m, err = cl.write("cs733", str, 1)
-	expect(t, m, &Msg{Kind: 'O'}, "file recreated", err)
+	expect(t, m, &filesystem.Msg{Kind: 'O'}, "file recreated", err)
 
 	// Overwrite the file with expiry time of 4. This should be the new time.
 	m, err = cl.write("cs733", str, 3)
-	expect(t, m, &Msg{Kind: 'O'}, "file overwriten with exptime=4", err)
+	expect(t, m, &filesystem.Msg{Kind: 'O'}, "file overwriten with exptime=4", err)
 
 	// The last expiry time was 3 seconds. We should expect the file to still be around 2 seconds later
 	time.Sleep(2 * time.Second)
 
 	// Expect the file to not have expired.
 	m, err = cl.read("cs733")
-	expect(t, m, &Msg{Kind: 'C', Contents: []byte(str)}, "file to not expire until 4 sec", err)
+	expect(t, m, &filesystem.Msg{Kind: 'C', Contents: []byte(str)}, "file to not expire until 4 sec", err)
 
 	time.Sleep(3 * time.Second)
 	// 5 seconds since the last write. Expect the file to have expired
 	m, err = cl.read("cs733")
-	expect(t, m, &Msg{Kind: 'F'}, "file not found after 4 sec", err)
+	expect(t, m, &filesystem.Msg{Kind: 'F'}, "file not found after 4 sec", err)
 
 	// Create the file with an expiry time of 1 sec. We're going to delete it
 	// then immediately create it. The new file better not get deleted. 
 	m, err = cl.write("cs733", str, 1)
-	expect(t, m, &Msg{Kind: 'O'}, "file created for delete", err)
+	expect(t, m, &filesystem.Msg{Kind: 'O'}, "file created for delete", err)
 
 	m, err = cl.delete("cs733")
-	expect(t, m, &Msg{Kind: 'O'}, "deleted ok", err)
+	expect(t, m, &filesystem.Msg{Kind: 'O'}, "deleted ok", err)
 
 	m, err = cl.write("cs733", str, 0) // No expiry
-	expect(t, m, &Msg{Kind: 'O'}, "file recreated", err)
+	expect(t, m, &filesystem.Msg{Kind: 'O'}, "file recreated", err)
 
 	time.Sleep(1100 * time.Millisecond) // A little more than 1 sec
 	m, err = cl.read("cs733")
-	expect(t, m, &Msg{Kind: 'C'}, "file should not be deleted", err)
+	expect(t, m, &filesystem.Msg{Kind: 'C'}, "file should not be deleted", err)
 
 }
 
@@ -294,7 +280,7 @@ func TestRPC_ConcurrentWrites(t *testing.T) {
 	errCh := make(chan error, nclients)
 	var sem sync.WaitGroup // Used as a semaphore to coordinate goroutines to begin concurrently
 	sem.Add(1)
-	ch := make(chan *Msg, nclients*niters) // channel for all replies
+	ch := make(chan *filesystem.Msg, nclients*niters) // channel for all replies
 	for i := 0; i < nclients; i++ {
 		go func(i int, cl *Client) {
 			sem.Wait()
@@ -400,7 +386,7 @@ func TestRPC_ConcurrentCas(t *testing.T) {
 		t.Fatalf("Expected to be able to read after 1000 writes. Got msg.Kind = %d, msg.Contents=%s", m.Kind, m.Contents)
 	}
 }
-
+*/
 //----------------------------------------------------------------------
 // Utility functions
 
@@ -416,12 +402,12 @@ type Msg struct {
 	Version  int
 }
 
-func (cl *Client) read(filename string) (*Msg, error) {
+func (cl *Client) read(filename string) (*filesystem.Msg, error) {
 	cmd := "read " + filename + "\r\n"
 	return cl.sendRcv(cmd)
 }
 
-func (cl *Client) write(filename string, contents string, exptime int) (*Msg, error) {
+func (cl *Client) write(filename string, contents string, exptime int) (*filesystem.Msg, error) {
 	var cmd string
 	if exptime == 0 {
 		cmd = fmt.Sprintf("write %s %d\r\n", filename, len(contents))
@@ -432,7 +418,7 @@ func (cl *Client) write(filename string, contents string, exptime int) (*Msg, er
 	return cl.sendRcv(cmd)
 }
 
-func (cl *Client) cas(filename string, version int, contents string, exptime int) (*Msg, error) {
+func (cl *Client) cas(filename string, version int, contents string, exptime int) (*filesystem.Msg, error) {
 	var cmd string
 	if exptime == 0 {
 		cmd = fmt.Sprintf("cas %s %d %d\r\n", filename, version, len(contents))
@@ -443,7 +429,7 @@ func (cl *Client) cas(filename string, version int, contents string, exptime int
 	return cl.sendRcv(cmd)
 }
 
-func (cl *Client) delete(filename string) (*Msg, error) {
+func (cl *Client) delete(filename string) (*filesystem.Msg, error) {
 	cmd := "delete " + filename + "\r\n"
 	return cl.sendRcv(cmd)
 }
@@ -455,18 +441,22 @@ type Client struct {
 	reader *bufio.Reader // a bufio Reader wrapper over conn
 }
 
-func mkClient(t *testing.T) *Client {
+func mkClient(port string) *Client {
+	fmt.Println("&&&&&&&&",port)
 	var client *Client
-	raddr, err := net.ResolveTCPAddr("tcp", "localhost:8080")
+	raddr, err := net.ResolveTCPAddr("tcp", port)
+	fmt.Println("raddr",raddr)
 	if err == nil {
 		conn, err := net.DialTCP("tcp", nil, raddr)
+		fmt.Println("conn",conn)
 		if err == nil {
 			client = &Client{conn: conn, reader: bufio.NewReader(conn)}
 		}
 	}
 	if err != nil {
-		t.Fatal(err)
+		fmt.Errorf(err.Error())
 	}
+	fmt.Println("!!!!!!",client)
 	return client
 }
 
@@ -483,7 +473,7 @@ func (cl *Client) send(str string) error {
 	return err
 }
 
-func (cl *Client) sendRcv(str string) (msg *Msg, err error) {
+func (cl *Client) sendRcv(str string) (msg *filesystem.Msg, err error) {
 	if cl.conn == nil {
 		return nil, errNoConn
 	}
@@ -501,7 +491,7 @@ func (cl *Client) close() {
 	}
 }
 
-func (cl *Client) rcv() (msg *Msg, err error) {
+func (cl *Client) rcv() (msg *filesystem.Msg, err error) {
 	// we will assume no errors in server side formatting
 	line, err := cl.reader.ReadString('\n')
 	if err == nil {
@@ -531,9 +521,9 @@ func (cl *Client) rcv() (msg *Msg, err error) {
 	return msg, err
 }
 
-func parseFirst(line string) (msg *Msg, err error) {
+func parseFirst(line string) (msg *filesystem.Msg, err error) {
 	fields := strings.Fields(line)
-	msg = &Msg{}
+	msg = &filesystem.Msg{}
 
 	// Utility function fieldNum to int
 	toInt := func(fieldNum int) int {
@@ -579,6 +569,6 @@ func parseFirst(line string) (msg *Msg, err error) {
 	} else {
 		return msg, nil
 	}
-}*/
+}
 
 
