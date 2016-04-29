@@ -1,13 +1,21 @@
-# astha
-File server in golang
+# Raft
 
+Raft is a consensus algorithm like Paxos that is easy to understand. This package implements Raft in Golang. It is somewhat different from original implementation as read requests are not replicated.
 
-This is the initial implementation of File Server in golang.
+#Execution
 
-This file server accepts can accept requests from multiple clients and execute it concurrently. The concurrency is ensured by using suitable locks.
+go build
+./assignment4 <server-id>
 
-This file server takes user input to create,read and delete the file as specified by the user.
+#Code Structure
 
-To test this file server server.go file should be downloaded and a test file can be used with it named as filename_test.go in the same directory as server.go.
+###Client Handler
 
-To run this command 'go test' should be executed.
+Contains HandleClient class that listens to client requests and gives them response
+
+###Raft Node
+Replicates the client requests, maintains effective communication between servers
+
+###Raft State Machine
+Actual implementation of raft mechanisms. Handles vote request/respone,append entries request/response, timeouts etc for follower,candidate and leader
+
